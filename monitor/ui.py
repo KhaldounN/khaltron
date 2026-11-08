@@ -9,13 +9,14 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
+from .sentinel import SentinelHeader
 from .collect import State, collect
 from .config import BOOK, CONFIG
 from .model import DONE, FAILED, RUNNING, STOPPED, WAITING, Job
 from .util import duration, when
 
 GREEN, AMBER, RED, GREY = theme.GREEN, theme.AMBER, theme.RED, theme.MUTED
-SEGMENTS = 24  # the memory gauge is drawn as a row of segments
+SEGMENTS = 20  # the RAM and CPU gauges are drawn as rows of segments
 
 
 def bar(progress: float | None, width: int = 10) -> str:
@@ -24,6 +25,18 @@ def bar(progress: float | None, width: int = 10) -> str:
     progress = max(0.0, min(1.0, progress))
     full = round(progress * width)
     return "▰" * full + "▱" * (width - full) + f" {progress * 100:.0f}%"
+
+
+def pct(value: float | None) -> str:
+    return "" if value is None else f"{value:.0f}%"
+
+
+def gauge(canvas: tk.Canvas, share: float, colour: str) -> None:
+    """A row of SEGMENTS segments; the first `share` of them lit."""
+    canvas.delete("all")
+    lit = round(SEGMENTS * max(0.0, min(1.0, share)))
+    for i in range(SEGMENTS):
+        canvas.create_rectangle(i * 9, 2, i * 9 + 6, 14, width=0, fill=colour if i < lit else theme.RAISED)
 
 
 def gb(mb: float | None) -> str:
@@ -126,14 +139,19 @@ class App:
 
         top = ttk.Frame(outer)
         top.pack(fill="x")
-        ttk.Label(top, text="MEMORY FREE", style="Small.TLabel").pack(side="left")
-        self.memory_bar = tk.Canvas(top, width=SEGMENTS * 10, height=16, highlightthickness=0, bg=theme.BG)
-        self.memory_bar.pack(side="left", padx=8)
+        ttk.Label(top, text="RAM", style="Small.TLabel").pack(side="left")
+        self.memory_bar = tk.Canvas(top, width=SEGMENTS * 9, height=16, highlightthickness=0, bg=theme.BG)
+        self.memory_bar.pack(side="left", padx=6)
         self.memory_text = ttk.Label(top, text="...", style="Stat.TLabel")
         self.memory_text.pack(side="left")
-        ttk.Label(top, text="CPU", style="Small.TLabel").pack(side="left", padx=(22, 6))
+        ttk.Label(top, text="CPU", style="Small.TLabel").pack(side="left", padx=(20, 0))
+        self.cpu_bar = tk.Canvas(top, width=SEGMENTS * 9, height=16, highlightthickness=0, bg=theme.BG)
+        self.cpu_bar.pack(side="left", padx=6)
         self.cpu_text = ttk.Label(top, text="", style="Stat.TLabel")
         self.cpu_text.pack(side="left")
+        ttk.Label(top, text="JOBS", style="Small.TLabel").pack(side="left", padx=(20, 6))
+        self.jobs_text = ttk.Label(top, text="", style="Stat.TLabel")
+        self.jobs_text.pack(side="left")
         start = ttk.Menubutton(top, text="Start / control")
         menu = tk.Menu(start, tearoff=False)
         menu.add_command(label="Add a job to the planned queue...", command=self.add_dialog)
@@ -170,7 +188,7 @@ class App:
         ttk.Label(box, text="Now running", style="Section.TLabel").pack(anchor="w")
         self.running = Table(box, self, [("name", "Job", 220), ("source", "From", 95), ("step", "Doing now", 290),
                                          ("progress", "Progress", 110), ("time", "Running for", 85),
-                                         ("left", "Time left", 75), ("memory", "Memory", 70)],
+                                         ("left", "Time left", 75), ("memory", "Memory", 70), ("cpu", "CPU", 55)],
                              ["stop", "pause2", "log", "folder"], height=4)
         self.running.pack(fill="both", expand=True)
         panes.add(box, weight=2)
@@ -192,7 +210,7 @@ class App:
                                         ("cpu", "CPU", 60), ("time", "Running for", 90), ("step", "Command", 380)],
                            ["stop"], height=6)
         self.problems = tk.Text(tabs, height=6, wrap="word", font=(theme.MONO, 9), relief="flat", bg=theme.PANEL,
-                                fg=theme.MUTED, insertbackground=theme.CYAN, padx=10, pady=8, highlightthickness=0)
+                                fg=theme.MUTED, insertbackground=theme.LASER, padx=10, pady=8, highlightthickness=0)
         tabs.add(self.finished, text="Finished")
         tabs.add(self.tasks, text="Scheduled tasks")
         tabs.add(self.procs, text="Python processes")
@@ -203,35 +221,21 @@ class App:
         self.status.pack(fill="x", pady=(6, 0))
 
     def brand(self):
-        """The header: logo, name, tagline, a live dot that blinks on every refresh, and the clock."""
-        from PIL import ImageTk
-        header = tk.Frame(self.root, bg=theme.PANEL)
-        header.pack(fill="x")
-        self.logo_image = ImageTk.PhotoImage(theme.logo(44))
-        tk.Label(header, image=self.logo_image, bg=theme.PANEL).pack(side="left", padx=(14, 10), pady=10)
-        words = tk.Frame(header, bg=theme.PANEL)
-        words.pack(side="left")
-        tk.Label(words, text=theme.NAME.upper(), font=(theme.FONT, 19, "bold"), fg=theme.TEXT,
-                 bg=theme.PANEL).pack(anchor="w")
-        tk.Label(words, text=theme.TAGLINE.upper(), font=(theme.FONT, 8, "bold"), fg=theme.CYAN,
-                 bg=theme.PANEL).pack(anchor="w")
-        self.clock = tk.Label(header, text="", font=(theme.MONO, 11), fg=theme.MUTED, bg=theme.PANEL)
-        self.clock.pack(side="right", padx=(6, 16))
-        self.live = tk.Label(header, text="\u25cf LIVE", font=(theme.FONT, 9, "bold"), fg=theme.GREEN, bg=theme.PANEL)
-        self.live.pack(side="right")
+        """The header: Khaltron as a sentinel drone (sentinel.py), and a red laser line under it."""
+        self.header = SentinelHeader(self.root)
+        self.header.pack(fill="x")
         glow = tk.Canvas(self.root, height=2, highlightthickness=0, bg=theme.BG)
         glow.pack(fill="x")
         glow.bind("<Configure>", lambda event: self.glow_line(glow, event.width))
 
     @staticmethod
     def glow_line(canvas: tk.Canvas, width: int):
-        """A thin cyan-to-violet line under the header."""
+        """A thin laser line under the header: dark red at the ends, bright in the middle."""
         canvas.delete("all")
-        start, end = theme._rgb(theme.CYAN), theme._rgb(theme.VIOLET)
         steps = 60
         for i in range(steps):
-            t = i / (steps - 1)
-            colour = "#%02x%02x%02x" % tuple(round(a + (b - a) * t) for a, b in zip(start, end))
+            t = 1 - abs(i / (steps - 1) * 2 - 1)  # 0 at the ends, 1 in the middle
+            colour = theme.mix(theme.LASER_DARK, theme.LASER, t)
             canvas.create_rectangle(width * i / steps, 0, width * (i + 1) / steps + 1, 2, fill=colour, width=0)
 
     # --- reading in the background --------------------------------------------------------------------------
@@ -284,17 +288,20 @@ class App:
         if h:
             limit = CONFIG["low_memory_mb"]
             colour = RED if h.free_mb < limit else AMBER if h.free_mb < 2 * limit else GREEN
-            share = h.free_mb / h.total_mb if h.total_mb else 0
-            self.memory_bar.delete("all")
-            lit = round(SEGMENTS * min(1, share))
-            for i in range(SEGMENTS):
-                self.memory_bar.create_rectangle(i * 10, 2, i * 10 + 7, 14, width=0,
-                                                 fill=colour if i < lit else theme.RAISED)
-            self.memory_text.configure(text=f"{gb(h.free_mb)} / {gb(h.total_mb)}", foreground=colour)
-            self.cpu_text.configure(text=f"{h.cpu:.0f}%",
-                                    foreground=RED if h.cpu > 85 else AMBER if h.cpu > 60 else theme.TEXT)
-        self.clock.configure(text=time.strftime("%H:%M:%S"))
-        self.live.configure(fg=theme.GREEN if self.live.cget("fg") != theme.GREEN else theme.CYAN_DARK)
+            # RAM: the bar shows what is IN USE, like Task Manager; its colour warns when little is left
+            used_share = h.used_mb / h.total_mb if h.total_mb else 0
+            gauge(self.memory_bar, used_share, colour)
+            self.memory_text.configure(
+                text=f"{gb(h.used_mb)} used of {gb(h.total_mb)} ({used_share * 100:.0f}%) \u00b7 {gb(h.free_mb)} free",
+                foreground=colour)
+            cpu_colour = RED if h.cpu > 85 else AMBER if h.cpu > 60 else GREEN
+            gauge(self.cpu_bar, h.cpu / 100, cpu_colour)
+            self.cpu_text.configure(text=f"{h.cpu:.0f}% of {h.cores} threads", foreground=cpu_colour)
+        other = f"  (other programs: {gb(max(0, h.used_mb - state.jobs_mb))})" if h else ""
+        self.jobs_text.configure(text=f"{gb(state.jobs_mb) or '0 MB'} RAM \u00b7 {state.jobs_cpu:.0f}% CPU{other}")
+        alert = bool(h and h.free_mb < CONFIG["low_memory_mb"]) or any(
+            j.state == FAILED and j.finished and now - j.finished < 600 for j in state.finished)
+        self.header.status(len(state.running), len(state.waiting), alert)
         flags = []
         playing = gaming.is_on()
         if playing:
@@ -313,7 +320,7 @@ class App:
 
         self.running.show(state.running, lambda i, j: (
             j.name, j.source, j.step, bar(j.progress), duration(now - j.started) if j.started else "",
-            f"~{duration(j.eta_minutes * 60)}" if j.eta_minutes else "", gb(j.memory_mb)))
+            f"~{duration(j.eta_minutes * 60)}" if j.eta_minutes else "", gb(j.memory_mb), pct(j.cpu)))
         self.waiting.show(state.waiting, lambda i, j: (
             i + 1, j.name, j.source, j.step, when(j.started)))
         history = sorted(state.finished + alerts.history(), key=lambda j: j.finished or 0, reverse=True)[:40]
@@ -321,7 +328,7 @@ class App:
         self.tasks.show(state.tasks, lambda i, j: (j.name, j.state, j.step, when(j.started), when(j.finished)))
         self.procs.show(state.processes, lambda i, j: (
             j.name + ("  (protected)" if j.ref.get("protected") else ""), j.pid, gb(j.memory_mb),
-            f"{j.ref.get('cpu', 0):.0f}%", duration(now - j.started) if j.started else "", j.step))
+            pct(j.cpu), duration(now - j.started) if j.started else "", j.step))
         self.problems.delete("1.0", "end")
         self.problems.insert("end", "\n".join(state.errors) or "No problems reading the jobs.")
 

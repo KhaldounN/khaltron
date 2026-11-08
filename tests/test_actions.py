@@ -82,10 +82,10 @@ def test_every_control_action_has_a_question():
 def test_alerts_started_finished_and_low_memory(state_dir):
     watch = alerts.Watcher()
     job = Job("plan:1", "Deep analysis", "Planned", "running")
-    healthy = Health(8000, 16000, 8000, 9000, 10)
+    healthy = Health(8000, 16000, 8000, 8000, 9000, 10, 12)
     assert watch.changes(State(health=healthy, running=[job])) == []  # first look: nothing is "new"
     done = Job("plan:1", "Deep analysis", "Planned", "done", step="exit code 0")
-    low = Health(900, 16000, 900, 1000, 10)
+    low = Health(900, 16000, 15100, 900, 1000, 10, 12)
     told = watch.changes(State(health=low, finished=[done]))
     assert ("Job finished", "Deep analysis\nexit code 0") in told
     assert any(title == "Memory is low" for title, _ in told)

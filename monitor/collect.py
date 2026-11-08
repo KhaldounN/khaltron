@@ -22,6 +22,8 @@ class State:
     stage2_paused: bool = False
     queue_paused: bool = False
     errors: list[str] = field(default_factory=list)
+    jobs_mb: float = 0.0    # RAM used by every running job together (each process counted once)
+    jobs_cpu: float = 0.0   # their CPU, percent of the whole CPU
     taken: float = 0.0
 
 
@@ -46,9 +48,12 @@ def collect(slow: bool = False) -> State:
     state.processes = attempt("processes", lambda: processes.rows(procs)) or []
 
     # running first: the book analysis, then stage 2, the library job, and planned jobs
-    main = attempt("book analyses", lambda: book_main.read(BOOK / "results" / "jobs", procs)) or ([], [])
-    stage2 = attempt("stage 2", lambda: book_stage2.read(BOOK, procs)) or ([], [], [])
-    library = attempt("library", lambda: book_library.read(BOOK, procs, slow)) or ([], [])
+    # the Book Analyzer's own jobs, only when that project is there (config.json "book_analyzer")
+    has_book = (BOOK / "analyzer").exists()
+    main = (attempt("book analyses", lambda: book_main.read(BOOK / "results" / "jobs", procs))
+            if has_book else None) or ([], [])
+    stage2 = (attempt("stage 2", lambda: book_stage2.read(BOOK, procs)) if has_book else None) or ([], [], [])
+    library = (attempt("library", lambda: book_library.read(BOOK, procs, slow)) if has_book else None) or ([], [])
     entries = attempt("planned", planned.load) or []
     plan = attempt("planned", lambda: planned.jobs_from(entries)) or ([], [], [])
     for job in plan[0]:
@@ -56,11 +61,19 @@ def collect(slow: bool = False) -> State:
 
     # the library job's current book also shows as a main analysis: keep both (the library row shows the count)
     state.running = main[0] + stage2[0] + library[0] + plan[0]
+    # what the jobs use: per job (with its children), and all together with no process counted twice (the
+    # library job's worker is also listed as its own book analysis)
+    counted: set[int] = set()
+    for job in state.running:
+        job.cpu = processes.tree_cpu(job.pid, procs)
+        counted |= processes.family(job.pid)
+    state.jobs_mb = sum(procs[p].memory_mb for p in counted if p in procs)
+    state.jobs_cpu = sum(procs[p].cpu for p in counted if p in procs) / processes.CORES
     state.waiting = plan[1] + stage2[1] + library[1]
     state.finished = sorted(main[1] + stage2[2] + plan[2], key=lambda j: j.finished or 0, reverse=True)[:40]
     status = book_stage2.folder(BOOK) / "status.json"
     from .util import read_json
-    state.stage2_paused = read_json(status, {}).get("state") == "paused"
+    state.stage2_paused = has_book and read_json(status, {}).get("state") == "paused"
     state.queue_paused = planned.queue_paused()
 
     if slow or not _tasks[0]:

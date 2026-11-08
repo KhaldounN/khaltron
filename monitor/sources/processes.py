@@ -39,6 +39,7 @@ class Proc:
     protected: bool
 
 
+CORES = psutil.cpu_count() or 1  # logical processors: psutil gives a process's CPU as % of ONE of them
 _seen: dict[int, psutil.Process] = {}  # kept between refreshes: CPU % is measured since the last look
 
 
@@ -76,16 +77,27 @@ def snapshot() -> dict[int, Proc]:
     return found
 
 
+def family(pid: int | None) -> set[int]:
+    """A process and everything it started (a job's real size: PowerShell scripts start python children)."""
+    if not pid:
+        return set()
+    try:
+        return {pid} | {c.pid for c in psutil.Process(pid).children(recursive=True)}
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return {pid}
+
+
 def tree_memory(pid: int | None, procs: dict[int, Proc]) -> float | None:
-    """Memory of a process and its children (a job's real size: PowerShell scripts start python children)."""
+    """Memory (working set, as Task Manager's details show) of a process and its children."""
+    total = sum(procs[p].memory_mb for p in family(pid) if p in procs)
+    return total or None
+
+
+def tree_cpu(pid: int | None, procs: dict[int, Proc]) -> float | None:
+    """CPU of a process and its children, as a percent of the whole CPU (Task Manager's way, so 100 = every core)."""
     if not pid:
         return None
-    try:
-        family = [pid] + [c.pid for c in psutil.Process(pid).children(recursive=True)]
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return procs[pid].memory_mb if pid in procs else None
-    total = sum(procs[p].memory_mb for p in family if p in procs)
-    return total or None
+    return sum(procs[p].cpu for p in family(pid) if p in procs) / CORES
 
 
 def running_with(text: str, procs: dict[int, Proc]) -> Proc | None:
@@ -107,5 +119,5 @@ def rows(procs: dict[int, Proc]) -> list[Job]:
         script = next((part for part in p.cmdline.split() if part.endswith((".py", ".pyw"))), p.name)
         out.append(Job(id=f"proc:{p.pid}", name=p.label or f"Other: {os.path.basename(script)}", source="Process",
                        state=RUNNING, step=p.cmdline[-160:], started=p.started, pid=p.pid, memory_mb=p.memory_mb,
-                       actions=[] if p.protected else ["stop"], ref={"cpu": p.cpu, "protected": p.protected}))
+                       cpu=p.cpu / CORES, actions=[] if p.protected else ["stop"], ref={"protected": p.protected}))
     return out

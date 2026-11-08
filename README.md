@@ -1,60 +1,128 @@
-# Khaltron (the Job Monitor)
+# Khaltron
 
-A small dark-themed desktop window that shows the background jobs running on this PC, what is queued after them, and how much
-memory is left, with buttons to control them.
+**A sentinel for your background jobs.** Khaltron is a small Windows desktop app that watches the long-running jobs
+on your PC, the ones that run for hours in the background (data processing, AI model runs, batch scripts), and
+shows you in one dark, drone-themed window:
 
-- **Open it:** the desktop shortcut "Khaltron" or **Ctrl+Alt+J**. It also starts in the tray at logon.
-  Closing the window hides it to the tray (icon by the clock); right-click the icon > Quit to end it.
-- **Set up / repair:** `powershell -ExecutionPolicy Bypass -File install.ps1`
-- **Tests:** `.venv\Scripts\python.exe -m pytest`
-- **Look:** `monitor\theme.py` holds every colour and font (dark navy, neon cyan, a touch of violet) and draws the
-  logo; `assets\khaltron.ico` is the shortcut's icon (made from it by `install.ps1`).
+- **what is running now**: what each job is doing, its progress, how long it has run, time left, and its RAM and CPU;
+- **what is queued after it**, and what each waiting job is waiting for;
+- **what finished or failed**, with its log one click away;
+- **how much of your PC is free**: RAM in use (the same numbers as Task Manager), CPU, and how much of that your jobs take.
 
-## What it shows
-| Part | Where it comes from |
-|---|---|
-| Memory free, CPU | Windows (the smaller of free RAM and remaining commit: the real limit for big models) |
-| Book analyses | `book analyzer v2\results\jobs\<key>.json` (the website's worker) |
-| Stage 2 | `results\jobs\second_stage\` status, queue, failed list and log |
-| Library pre-analysis | the `analyze_library.py` process + `results\library_progress.log` |
-| Planned jobs | `state\planned.json` (jobs queued with `jobq`) |
-| Scheduled tasks | Windows Task Scheduler (names in `monitor\config.py`) |
-| Python processes | every known python process, and unknown ones using > 300 MB or > 20% CPU |
+It also gives you a simple **job queue** (`jobq`): line jobs up and they run one at a time, each when the one it
+waits for is done. So two heavy jobs never fight over your memory, and an AI assistant or a script can queue work you
+can still see and control.
 
-Settings can be changed in a `config.json` next to this file (any keys of `DEFAULTS` in `monitor\config.py`).
+![Khaltron watching book analyses, with more jobs queued](assets/screenshot.png)
 
-## The planned queue (`jobq`)
-Jobs queued here run **one at a time, in order**, each when what it waits for is over. A small runner process
-(`python -m monitor.runner`) starts them; it runs on its own (the window can be closed) and stops when the queue
-is empty.
+## Features
+
+- **Live view**, refreshed every 2 seconds. It only *reads* status files and process info, so it never slows a job down.
+- **Planned queue**: `jobq add --name "..." --after previous -- python my_script.py`. A small runner process starts the
+  jobs in order and keeps going when the window is closed.
+- **Full control**: stop a job (and everything it started), reorder or remove waiting jobs, run one next, pause the
+  queue. Every action asks "Are you sure?" first.
+- **Protected processes**: things that must never be stopped (by default: a voice server, a website, Khaltron itself)
+  have no Stop button, and are checked again right before any stop.
+- **Notifications**: a Windows pop-up when a job starts, finishes or fails, and when free memory runs low.
+- **Gaming mode**: one click (or Ctrl+Alt+G) freezes every background job so a game gets the CPU and memory, and
+  puts everything back when you switch it off.
+- **Tray icon**: closing the window hides it next to the clock. It can start with Windows.
+
+## Requirements
+
+- Windows 10 or 11
+- Python 3.11 or newer (with tkinter, which the standard Windows installer includes)
+
+## Install
 
 ```powershell
-.\jobq.ps1 add --name "Deep analysis" --after library --cwd "..\book analyzer v2" -- .venv\Scripts\python.exe -u scripts\deep_analysis.py
-.\jobq.ps1 add --name "Then this" --after previous -- some_script.ps1
-.\jobq.ps1 list
+git clone https://github.com/KhaldounN/khaltron.git
+cd khaltron
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
-`--after`: `library` (the library pre-analysis), `stage2`, `main` (a book analysis), `previous` (the last queued
-job), a job id, or `pid:<number>`. Output goes to `state\logs\<id>.log`; the window shows its last line.
 
-A script that runs itself can just report in (it shows as waiting / running / done):
+`install.ps1` makes a Python environment (`.venv`) with the four packages it needs (`psutil`, `pystray`, `pillow`,
+`pytest`), a desktop shortcut **Khaltron** (hotkey **Ctrl+Alt+J**), and a logon task that starts it in the tray.
+Prefer to do it by hand?
+
 ```powershell
-$jobq = "...\job monitor\jobq.ps1"
-$job = & $jobq begin --name "My chain" --after library   # its own process id is filled in
-& $jobq running $job
-& $jobq finish $job --exit $LASTEXITCODE
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install psutil pystray pillow pytest
+.venv\Scripts\pythonw.exe monitor.pyw
 ```
 
-## Safety
-Every control button asks first. The read-aloud voice server, the Book Analyzer website (and its watchdog) and the
-monitor itself are **never** stopped: they have no Stop button, and `monitor\protect.py` checks again (the process
-and all its children) right before any stop. Stage 2 is paused with its own `second_stage.pause()`, so the book's
-try is given back and it isn't marked as failed.
+## Queue jobs with `jobq`
+
+```powershell
+# run a script now (or as soon as the queue is free)
+.\jobq.ps1 add --name "Train the model" --cwd C:\work\project -- .venv\Scripts\python.exe -u train.py
+
+# run another one after it
+.\jobq.ps1 add --name "Evaluate" --after previous -- .venv\Scripts\python.exe -u evaluate.py
+
+.\jobq.ps1 list        # what is queued, running and done
+.\jobq.ps1 pause       # no new job starts (running ones go on);  .\jobq.ps1 resume
+```
+
+- `--after` can be `previous` (the last job in the queue), a job id, or `pid:<number>` (wait for a process to end),
+  and you can give it more than once.
+- The command starts at the first word that isn't an option, so the `--` is optional (PowerShell drops it anyway
+  when it runs `jobq.ps1`).
+- Each job's output goes to `state\logs\<id>.log`, and the window shows its last line as "Doing now".
+- A `.ps1` command is run with PowerShell.
+
+A script that runs on its own can also just **report in**, so it shows in the window:
+
+```powershell
+$job = & .\jobq.ps1 begin --name "Nightly export"      # it shows as running (its process id is filled in)
+# ... the script's work ...
+& .\jobq.ps1 finish $job --exit $LASTEXITCODE
+```
 
 ## Gaming mode
-`gaming.ps1 on | off | toggle | status` (also Ctrl+Alt+G, the tray menu, Start / control, and typing
-`gaming mode on/off` in Claude). **On** pauses the planned queue, freezes (suspends) every running background job and
-asks Windows to move its memory to the page file, stops the read-aloud voice and sets the power mode to Best
-performance; the record of what it did is `~/.claude/gaming.json` (its existence is the switch). **Off** undoes
-exactly that: frozen jobs carry on where they were. While it is on, the window freezes any job that starts anyway on
-every refresh (`gaming.enforce()`). The website, Khaltron and its runner are never frozen. Code: `monitor\gaming.py`;
-each switch is logged in `state\gaming.log`. The tests (`tests\test_gaming.py`) only see processes they start themselves.
+
+`gaming.ps1 on | off | toggle | status`, or Ctrl+Alt+G, the tray menu, or *Start / control* in the window.
+**On** pauses the planned queue, freezes (suspends) every running background job and asks Windows to move its memory
+aside, stops the read-aloud voice server and sets the Windows power mode to Best performance. What it changed is
+written to `~/.claude/gaming.json` (the file existing *is* the switch). **Off** undoes exactly that, and frozen jobs
+carry on where they were. While it is on, a job that starts anyway is frozen too. Protected processes are never
+frozen. Every switch is logged in `state\gaming.log`.
+
+## Make it watch your own jobs
+
+Khaltron was built to watch the jobs of one project (a book-analysis website). That project's readers sit in
+`monitor\sources\` (`book_main.py`, `book_stage2.py`, `book_library.py`), and they switch themselves off when that
+project isn't there. Without them you still get the queue, the Python processes, scheduled tasks and the PC's health.
+
+To watch something of your own, add a reader to `monitor\sources\` that returns `Job` rows (see `monitor\model.py`)
+and call it from `monitor\collect.py`. A reader only *reads* (status files, logs, processes), so the window stays quick.
+
+Settings go in a `config.json` next to `monitor.pyw`; any key of `DEFAULTS` in `monitor\config.py` can be changed:
+
+```json
+{ "low_memory_mb": 2000, "scheduled_tasks": ["My nightly task"], "refresh_seconds": 3 }
+```
+
+Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\processes.py` (the `True` ones).
+
+## How it is built
+
+| File | What it does |
+|---|---|
+| `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
+| `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
+| `monitor\sentinel.py` | the animated header: the drone's scanning red eye and its laser |
+| `monitor\theme.py` | every colour and font, the logo, the dark title bar |
+| `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |
+| `monitor\sources\` | the readers (jobs, processes, PC health, scheduled tasks) |
+| `monitor\planned.py`, `monitor\runner.py`, `jobq.py` | the planned queue, the process that runs it, and its command line |
+| `monitor\actions.py`, `monitor\protect.py` | what the buttons do, and the never-stop list |
+| `monitor\alerts.py`, `monitor\tray.py` | notifications, history, the tray icon |
+| `monitor\gaming.py`, `gaming.ps1` | gaming mode |
+
+Run the tests with `.venv\Scripts\python.exe -m pytest`.
+
+## License
+
+[MIT](LICENSE): free to use, copy, change and share.

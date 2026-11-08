@@ -18,9 +18,11 @@ class _Memory(ctypes.Structure):
 class Health:
     free_mb: int        # what a new program can still get: the smaller of free RAM and Windows' remaining commit
     total_mb: int       # RAM
+    used_mb: int        # RAM in use (Task Manager's "In use") = total - available
     ram_free_mb: int
     commit_free_mb: int | None
     cpu: float          # percent of the whole CPU
+    cores: int          # logical processors (threads)
 
 
 def read() -> Health:
@@ -33,4 +35,5 @@ def read() -> Health:
         if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
             commit = int(status.avail_commit / 2 ** 20)
     free = min(ram_free, commit) if commit is not None else ram_free
-    return Health(free, int(ram.total / 2 ** 20), ram_free, commit, psutil.cpu_percent(None))
+    total = int(ram.total / 2 ** 20)
+    return Health(free, total, total - ram_free, ram_free, commit, psutil.cpu_percent(None), psutil.cpu_count() or 1)

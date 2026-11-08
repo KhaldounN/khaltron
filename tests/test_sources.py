@@ -60,3 +60,21 @@ def test_known_processes_and_protection_labels():
     assert label_for("python -m streamlit run app/streamlit_app.py")[2] is True
     assert label_for("python -m analyzer.worker book.txt r.pkl s.json") == ("Book analysis worker", True, False)
     assert label_for("python something_else.py") == ("", False, False)
+
+
+def test_job_cpu_is_a_share_of_the_whole_cpu_and_never_counted_twice(monkeypatch):
+    """psutil gives a process's CPU as % of ONE core (a busy worker shows 180%); Task Manager shows % of all."""
+    from monitor.sources import processes
+    monkeypatch.setattr(processes, "CORES", 12)
+    procs = {1: Proc(1, "python.exe", "x", 600, 180, 0, "", False, False),
+             2: Proc(2, "python.exe", "y", 100, 60, 0, "", False, False)}
+    monkeypatch.setattr(processes, "family", lambda pid: {1, 2} if pid == 1 else {pid} if pid else set())
+    assert processes.tree_cpu(1, procs) == 20.0  # (180 + 60) / 12 cores
+    assert processes.tree_memory(1, procs) == 700
+
+
+def test_health_reports_ram_in_use_like_task_manager():
+    from monitor.sources import health
+    found = health.read()
+    assert found.used_mb + found.ram_free_mb == found.total_mb
+    assert found.cores >= 1 and 0 <= found.cpu <= 100

@@ -19,6 +19,7 @@ class Job:
     log: str | None = None       # a log file to open
     folder: str | None = None    # a folder to open
     memory_mb: float | None = None
+    cpu: float | None = None     # percent of the WHOLE CPU (all cores), like Task Manager
     eta_minutes: float | None = None
     actions: list[str] = field(default_factory=list)  # buttons this row allows: see actions.py
     ref: dict = field(default_factory=dict)           # whatever the actions need (queue key, task name...)
