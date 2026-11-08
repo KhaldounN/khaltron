@@ -3,17 +3,12 @@ pystray runs in its own thread; its menu clicks are passed to the window through
 
 from PIL import Image, ImageDraw
 
+from . import gaming, theme
+
 
 def icon_image(size: int = 64) -> Image.Image:
-    """A dark rounded square with three bars of a progress chart."""
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    s = size / 64
-    draw.rounded_rectangle((2 * s, 2 * s, 62 * s, 62 * s), radius=12 * s, fill=(32, 41, 54, 255))
-    for i, (height, colour) in enumerate(((40, (76, 175, 80)), (28, (129, 199, 132)), (16, (200, 230, 201)))):
-        x = 12 * s + i * 15 * s
-        draw.rounded_rectangle((x, (54 - height) * s, x + 11 * s, 54 * s), radius=3 * s, fill=colour)
-    return image
+    """Khaltron's logo (theme.logo): a glowing cyan hexagon with a K."""
+    return theme.logo(size)
 
 
 class Tray:
@@ -21,11 +16,13 @@ class Tray:
         import pystray
         self.results, self.app_ref = results_queue, app_ref
         menu = pystray.Menu(
-            pystray.MenuItem("Show Job Monitor", lambda: self.results.put(("show", None)), default=True),
+            pystray.MenuItem(f"Show {theme.NAME}", lambda: self.results.put(("show", None)), default=True),
+            pystray.MenuItem("Gaming mode", lambda: self.results.put(("gaming", None)),
+                             checked=lambda _: gaming.is_on()),
             pystray.MenuItem("Alerts", self.toggle_alerts, checked=lambda _: self.app_ref().alerts_on),
             pystray.MenuItem("Quit", lambda: self.results.put(("quit", None))),
         )
-        self.icon = pystray.Icon("job_monitor", icon_image(), "Job Monitor", menu)
+        self.icon = pystray.Icon("khaltron", icon_image(), theme.NAME, menu)
         self.icon.run_detached()
 
     def toggle_alerts(self):

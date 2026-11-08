@@ -49,3 +49,12 @@ Every control button asks first. The read-aloud voice server, the Book Analyzer 
 monitor itself are **never** stopped: they have no Stop button, and `monitor\protect.py` checks again (the process
 and all its children) right before any stop. Stage 2 is paused with its own `second_stage.pause()`, so the book's
 try is given back and it isn't marked as failed.
+
+## Gaming mode
+`gaming.ps1 on | off | toggle | status` (also Ctrl+Alt+G, the tray menu, Start / control, and typing
+`gaming mode on/off` in Claude). **On** pauses the planned queue, freezes (suspends) every running background job and
+asks Windows to move its memory to the page file, stops the read-aloud voice and sets the power mode to Best
+performance; the record of what it did is `~/.claude/gaming.json` (its existence is the switch). **Off** undoes
+exactly that: frozen jobs carry on where they were. While it is on, the window freezes any job that starts anyway on
+every refresh (`gaming.enforce()`). The website, Khaltron and its runner are never frozen. Code: `monitor\gaming.py`;
+each switch is logged in `state\gaming.log`. The tests (`tests\test_gaming.py`) only see processes they start themselves.

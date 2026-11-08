@@ -8,13 +8,14 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import actions, alerts, planned, runner
+from . import actions, alerts, gaming, planned, runner, theme
 from .collect import State, collect
 from .config import BOOK, CONFIG
 from .model import DONE, FAILED, RUNNING, STOPPED, WAITING, Job
 from .util import duration, when
 
-GREEN, AMBER, RED, GREY = "#2e7d32", "#b26a00", "#c62828", "#6b6b6b"
+GREEN, AMBER, RED, GREY = theme.GREEN, theme.AMBER, theme.RED, theme.MUTED
+SEGMENTS = 24  # the memory gauge is drawn as a row of segments
 
 
 def bar(progress: float | None, width: int = 10) -> str:
@@ -44,8 +45,9 @@ class Table(ttk.Frame):
             self.tree.heading(key, text=title, anchor="w")
             self.tree.column(key, width=width, minwidth=40, stretch=key in ("name", "step"), anchor="w")
         for state, colour in ((RUNNING, GREEN), (FAILED, RED), ("ended", AMBER), (STOPPED, AMBER),
-                              (WAITING, "#1f1f1f"), (DONE, GREY), ("protected", GREY)):
+                              (WAITING, theme.TEXT), (DONE, GREY), ("protected", GREY)):
             self.tree.tag_configure(state, foreground=colour)
+        self.tree.tag_configure("odd", background="#0d1320")  # every other row a shade darker
         scroll = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
@@ -87,10 +89,11 @@ class Table(ttk.Frame):
         for index, job in enumerate(jobs):
             tag = "protected" if job.ref.get("protected") else job.state
             if job.id in present:
-                self.tree.item(job.id, values=values(index, job), tags=(tag,))
+                self.tree.item(job.id, values=values(index, job), tags=(tag, "odd") if index % 2 else (tag,))
                 self.tree.move(job.id, "", index)
             else:
-                self.tree.insert("", index, iid=job.id, values=values(index, job), tags=(tag,))
+                self.tree.insert("", index, iid=job.id, values=values(index, job),
+                                 tags=(tag, "odd") if index % 2 else (tag,))
         self.enable()
 
 
@@ -102,16 +105,14 @@ class App:
         self.watcher = alerts.Watcher()
         self.alerts_on = True
         self.hidden_once = False
-        root.title("Job Monitor")
-        root.geometry("1040x720")
+        self.gaming_was = None  # gaming mode at the last refresh (a change pops up a notification)
+        root.title(theme.NAME)
+        root.geometry("1080x760")
         root.minsize(760, 520)
         root.protocol("WM_DELETE_WINDOW", self.hide)
-        style = ttk.Style(root)
-        style.configure("Treeview", rowheight=24, font=("Segoe UI", 10))
-        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
-        style.configure("Section.TLabel", font=("Segoe UI", 12, "bold"))
-        style.configure("Small.TLabel", foreground=GREY, font=("Segoe UI", 9))
+        theme.apply(root)
         self.build()
+        theme.dark_title_bar(root)
         if start_hidden:
             root.withdraw()
         threading.Thread(target=self.reader, daemon=True).start()
@@ -119,18 +120,20 @@ class App:
 
     # --- layout ---------------------------------------------------------------------------------------------
     def build(self):
-        outer = ttk.Frame(self.root, padding=12)
+        self.brand()
+        outer = ttk.Frame(self.root, padding=(14, 10, 14, 10))
         outer.pack(fill="both", expand=True)
 
         top = ttk.Frame(outer)
         top.pack(fill="x")
-        ttk.Label(top, text="Memory free", style="Section.TLabel").pack(side="left")
-        self.memory_bar = tk.Canvas(top, width=220, height=18, highlightthickness=0, bg="#e6e6e6")
+        ttk.Label(top, text="MEMORY FREE", style="Small.TLabel").pack(side="left")
+        self.memory_bar = tk.Canvas(top, width=SEGMENTS * 10, height=16, highlightthickness=0, bg=theme.BG)
         self.memory_bar.pack(side="left", padx=8)
-        self.memory_text = ttk.Label(top, text="...")
+        self.memory_text = ttk.Label(top, text="...", style="Stat.TLabel")
         self.memory_text.pack(side="left")
-        self.cpu_text = ttk.Label(top, text="")
-        self.cpu_text.pack(side="left", padx=16)
+        ttk.Label(top, text="CPU", style="Small.TLabel").pack(side="left", padx=(22, 6))
+        self.cpu_text = ttk.Label(top, text="", style="Stat.TLabel")
+        self.cpu_text.pack(side="left")
         start = ttk.Menubutton(top, text="Start / control")
         menu = tk.Menu(start, tearoff=False)
         menu.add_command(label="Add a job to the planned queue...", command=self.add_dialog)
@@ -149,13 +152,15 @@ class App:
         menu.add_command(label="Resume the planned queue", command=lambda: self.global_action(
             "Resume the planned queue?", lambda: actions.set_queue_paused(False)))
         menu.add_separator()
+        menu.add_command(label="Gaming mode on / off (Ctrl+Alt+G)", command=self.toggle_gaming)
+        menu.add_separator()
         menu.add_command(label="Open the Book Analyzer results folder", command=lambda: self.open_path(BOOK / "results"))
         menu.add_command(label="Refresh now", command=self.wake.set)
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
 
-        self.flags = ttk.Label(outer, text="", foreground=AMBER)
+        self.flags = ttk.Label(outer, text="", style="Flag.TLabel")
         self.flags.pack(fill="x", pady=(4, 0))
 
         panes = ttk.PanedWindow(outer, orient="vertical")
@@ -186,7 +191,8 @@ class App:
         self.procs = Table(tabs, self, [("name", "Process", 250), ("pid", "PID", 70), ("memory", "Memory", 80),
                                         ("cpu", "CPU", 60), ("time", "Running for", 90), ("step", "Command", 380)],
                            ["stop"], height=6)
-        self.problems = tk.Text(tabs, height=6, wrap="word", font=("Consolas", 9), relief="flat")
+        self.problems = tk.Text(tabs, height=6, wrap="word", font=(theme.MONO, 9), relief="flat", bg=theme.PANEL,
+                                fg=theme.MUTED, insertbackground=theme.CYAN, padx=10, pady=8, highlightthickness=0)
         tabs.add(self.finished, text="Finished")
         tabs.add(self.tasks, text="Scheduled tasks")
         tabs.add(self.procs, text="Python processes")
@@ -196,6 +202,38 @@ class App:
         self.status = ttk.Label(outer, text="Starting...", style="Small.TLabel")
         self.status.pack(fill="x", pady=(6, 0))
 
+    def brand(self):
+        """The header: logo, name, tagline, a live dot that blinks on every refresh, and the clock."""
+        from PIL import ImageTk
+        header = tk.Frame(self.root, bg=theme.PANEL)
+        header.pack(fill="x")
+        self.logo_image = ImageTk.PhotoImage(theme.logo(44))
+        tk.Label(header, image=self.logo_image, bg=theme.PANEL).pack(side="left", padx=(14, 10), pady=10)
+        words = tk.Frame(header, bg=theme.PANEL)
+        words.pack(side="left")
+        tk.Label(words, text=theme.NAME.upper(), font=(theme.FONT, 19, "bold"), fg=theme.TEXT,
+                 bg=theme.PANEL).pack(anchor="w")
+        tk.Label(words, text=theme.TAGLINE.upper(), font=(theme.FONT, 8, "bold"), fg=theme.CYAN,
+                 bg=theme.PANEL).pack(anchor="w")
+        self.clock = tk.Label(header, text="", font=(theme.MONO, 11), fg=theme.MUTED, bg=theme.PANEL)
+        self.clock.pack(side="right", padx=(6, 16))
+        self.live = tk.Label(header, text="\u25cf LIVE", font=(theme.FONT, 9, "bold"), fg=theme.GREEN, bg=theme.PANEL)
+        self.live.pack(side="right")
+        glow = tk.Canvas(self.root, height=2, highlightthickness=0, bg=theme.BG)
+        glow.pack(fill="x")
+        glow.bind("<Configure>", lambda event: self.glow_line(glow, event.width))
+
+    @staticmethod
+    def glow_line(canvas: tk.Canvas, width: int):
+        """A thin cyan-to-violet line under the header."""
+        canvas.delete("all")
+        start, end = theme._rgb(theme.CYAN), theme._rgb(theme.VIOLET)
+        steps = 60
+        for i in range(steps):
+            t = i / (steps - 1)
+            colour = "#%02x%02x%02x" % tuple(round(a + (b - a) * t) for a, b in zip(start, end))
+            canvas.create_rectangle(width * i / steps, 0, width * (i + 1) / steps + 1, 2, fill=colour, width=0)
+
     # --- reading in the background --------------------------------------------------------------------------
     def reader(self):
         last_slow = 0.0
@@ -203,6 +241,11 @@ class App:
             slow = time.time() - last_slow >= CONFIG["slow_refresh_seconds"]
             if slow:
                 last_slow = time.time()
+            try:
+                for frozen in gaming.enforce():  # gaming mode: a job that started anyway is frozen too
+                    self.results.put(("notify", ("Gaming mode: job frozen", frozen)))
+            except Exception as error:  # noqa: BLE001
+                self.results.put(("message", f"Gaming mode check failed: {error}"))
             try:
                 self.results.put(("state", collect(slow)))
             except Exception as error:  # noqa: BLE001
@@ -219,7 +262,12 @@ class App:
                 elif kind == "message":
                     self.status.configure(text=value)
                 elif kind == "error":
-                    messagebox.showerror("Job Monitor", value, parent=self.root)
+                    messagebox.showerror(theme.NAME, value, parent=self.root)
+                elif kind == "notify":
+                    if self.tray:
+                        self.tray.notify(*value)
+                elif kind == "gaming":
+                    self.toggle_gaming()
                 elif kind == "show":
                     self.show()
                 elif kind == "quit":
@@ -238,10 +286,23 @@ class App:
             colour = RED if h.free_mb < limit else AMBER if h.free_mb < 2 * limit else GREEN
             share = h.free_mb / h.total_mb if h.total_mb else 0
             self.memory_bar.delete("all")
-            self.memory_bar.create_rectangle(0, 0, 220 * min(1, share), 18, fill=colour, width=0)
-            self.memory_text.configure(text=f"{gb(h.free_mb)} of {gb(h.total_mb)}", foreground=colour)
-            self.cpu_text.configure(text=f"CPU {h.cpu:.0f}%")
+            lit = round(SEGMENTS * min(1, share))
+            for i in range(SEGMENTS):
+                self.memory_bar.create_rectangle(i * 10, 2, i * 10 + 7, 14, width=0,
+                                                 fill=colour if i < lit else theme.RAISED)
+            self.memory_text.configure(text=f"{gb(h.free_mb)} / {gb(h.total_mb)}", foreground=colour)
+            self.cpu_text.configure(text=f"{h.cpu:.0f}%",
+                                    foreground=RED if h.cpu > 85 else AMBER if h.cpu > 60 else theme.TEXT)
+        self.clock.configure(text=time.strftime("%H:%M:%S"))
+        self.live.configure(fg=theme.GREEN if self.live.cget("fg") != theme.GREEN else theme.CYAN_DARK)
         flags = []
+        playing = gaming.is_on()
+        if playing:
+            flags.append("GAMING MODE is on: background jobs are frozen (Start / control > Gaming mode off).")
+        if playing != self.gaming_was and self.gaming_was is not None and self.tray:
+            self.tray.notify("Gaming mode " + ("ON" if playing else "OFF"),
+                             "Background jobs frozen, voice off. Have fun!" if playing else "Background jobs carry on.")
+        self.gaming_was = playing
         if state.stage2_paused and any(j.source == "Stage 2" for j in state.waiting):
             flags.append("Stage 2 is paused (Start / control > Resume stage 2).")
         if state.queue_paused:
@@ -270,7 +331,7 @@ class App:
                                       f"{len(state.waiting)} waiting.")
                                    + f"  Planned queue runner: {'on' if runner.is_running() else 'off'}.")
         if self.tray:
-            self.tray.set_tooltip(f"Job Monitor: {len(state.running)} running, {len(state.waiting)} waiting")
+            self.tray.set_tooltip(f"{theme.NAME}: {len(state.running)} running, {len(state.waiting)} waiting")
         for title, message in self.watcher.changes(state):
             if self.alerts_on and self.tray:
                 self.tray.notify(title, message)
@@ -281,6 +342,14 @@ class App:
             if not messagebox.askyesno("Are you sure?", actions.question(job, action), parent=self.root):
                 return
         self.run_in_background(lambda: actions.do(job, action))
+
+    def toggle_gaming(self):
+        """No "are you sure?": it is meant to be quick, and switching it back undoes everything it did."""
+        def do():
+            message = gaming.toggle()
+            self.wake.set()
+            return message.splitlines()[0]
+        self.run_in_background(do)
 
     def global_action(self, text: str, do):
         if messagebox.askyesno("Are you sure?", text, parent=self.root):
@@ -310,7 +379,7 @@ class App:
         self.root.withdraw()
         if not self.hidden_once:
             self.hidden_once = True
-            self.tray.notify("Job Monitor is still watching", "It's in the tray by the clock. Right-click it to quit.")
+            self.tray.notify(f"{theme.NAME} is still watching", "It's in the tray by the clock. Right-click it to quit.")
 
     def show(self):
         self.root.deiconify()
@@ -330,6 +399,7 @@ class AddDialog(tk.Toplevel):
         super().__init__(app.root)
         self.app = app
         self.title("Add a job to the planned queue")
+        self.configure(bg=theme.BG)
         self.transient(app.root)
         self.resizable(True, False)
         frame = ttk.Frame(self, padding=12)
@@ -357,6 +427,7 @@ class AddDialog(tk.Toplevel):
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right")
         ttk.Button(buttons, text="Add to queue", command=self.add).pack(side="right", padx=6)
         frame.columnconfigure(1, weight=1)
+        theme.dark_title_bar(self)
         self.grab_set()
 
     def browse(self):
@@ -367,7 +438,7 @@ class AddDialog(tk.Toplevel):
     def add(self):
         command = [part.strip('"') for part in shlex.split(self.command.get(), posix=False)]
         if not command or not self.name.get().strip():
-            messagebox.showerror("Job Monitor", "Give it a name and a command.", parent=self)
+            messagebox.showerror(theme.NAME, "Give it a name and a command.", parent=self)
             return
         after = [] if self.after.get().startswith("nothing") else [self.after.get()]
         text = (f"Add '{self.name.get()}' to the planned queue?\n\n{' '.join(command)}\nin {self.cwd.get()}"
