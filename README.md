@@ -1,12 +1,14 @@
-# Job Monitor
+# Khaltron (the Job Monitor)
 
-A small desktop window that shows the background jobs running on this PC, what is queued after them, and how much
+A small dark-themed desktop window that shows the background jobs running on this PC, what is queued after them, and how much
 memory is left, with buttons to control them.
 
-- **Open it:** the desktop shortcut "Job Monitor" or **Ctrl+Alt+J**. It also starts in the tray at logon.
+- **Open it:** the desktop shortcut "Khaltron" or **Ctrl+Alt+J**. It also starts in the tray at logon.
   Closing the window hides it to the tray (icon by the clock); right-click the icon > Quit to end it.
 - **Set up / repair:** `powershell -ExecutionPolicy Bypass -File install.ps1`
 - **Tests:** `.venv\Scripts\python.exe -m pytest`
+- **Look:** `monitor\theme.py` holds every colour and font (dark navy, neon cyan, a touch of violet) and draws the
+  logo; `assets\khaltron.ico` is the shortcut's icon (made from it by `install.ps1`).
 
 ## What it shows
 | Part | Where it comes from |

@@ -13,7 +13,7 @@ DEFAULTS = {
     "low_memory_mb": 1500,          # below this the memory bar turns red and a warning pops up (stage 2's own limit)
     "heavy_process_mb": 300,        # a python process using more memory than this is listed
     "heavy_process_cpu": 20,        # ... or more CPU (percent of one core) than this
-    "scheduled_tasks": ["Book Analyzer website", "Book Visualizer library (3 am)", "Job Monitor"],
+    "scheduled_tasks": ["Book Analyzer website", "Book Visualizer library (3 am)", "Khaltron"],
     "port": 59126,                  # a second launch tells the first window to show itself through this port
 }
 

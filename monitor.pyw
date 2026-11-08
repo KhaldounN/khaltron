@@ -1,4 +1,4 @@
-"""Job Monitor: start with  .venv\\Scripts\\pythonw.exe monitor.pyw  (--tray: start hidden in the tray).
+"""Khaltron (the Job Monitor): start with  .venv\\Scripts\\pythonw.exe monitor.pyw  (--tray: start hidden in the tray).
 
 Only one copy runs: a second launch tells the first one (through a local port) to show its window, then exits."""
 

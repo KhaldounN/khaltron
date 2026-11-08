@@ -19,7 +19,7 @@ class Protected(Exception):
 def why_protected(pid: int) -> str | None:
     """The reason this process (or one of its children) may not be stopped, or None."""
     if pid in (os.getpid(), os.getppid(), 0, 4):
-        return "it is the Job Monitor itself (or Windows)"
+        return "it is Khaltron itself (or Windows)"
     try:
         process = psutil.Process(pid)
         family = [process] + process.children(recursive=True)
