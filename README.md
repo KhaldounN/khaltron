@@ -2,7 +2,7 @@
 
 **A cybernetic sentinel for your background jobs.** Khaltron 9000 is a small Windows desktop app that watches the long-running jobs
 on your PC, the ones that run for hours in the background (data processing, AI model runs, batch scripts), and
-shows you in one dark, Terminator-style window, watched over by a red-eyed drone:
+shows you in one dark window, watched over by a mechanical raccoon with glowing eyes:
 
 - **what is running now**: what each job is doing, its progress, how long it has run, time left, and its RAM and CPU;
 - **what is queued after it**, and what each waiting job is waiting for;
@@ -36,9 +36,11 @@ can still see and control.
 - **Protected processes**: things that must never be stopped (by default: a voice server, a website, Khaltron itself)
   have no Stop button, and are checked again right before any stop.
 - **Notifications**: a Windows pop-up when a job starts, finishes or fails, and when free memory runs low.
-- **A header that watches**: a robot holds your six busiest programs on its ledge and scans them
-  one by one (cyan). Switch gaming mode on and it hunts (red): it zooms in, locks onto every
-  program, then freezes, staring down. Put your own picture in `assets\header.jpg` (1600 x 533).
+- **A header that watches**: a mechanical raccoon grips a steel ledge where your six busiest apps stand as
+  cards; in monitor mode (cyan) it looks from card to card. Click **GAMING MODE** and it plays the design's
+  sequence once: red, it pushes in and glares at every card (TERMINATE?, WARNED), looks down as the beams flood
+  the ledge (PAUSED), then locks still. At that moment the jobs are really frozen. Cards it doesn't pause
+  (your browser...) honestly say SPARED. The design package it follows is in `design/khaltron-header/`.
 - **Gaming mode**: one click on the header's GAMING MODE button (or Ctrl+Alt+G) freezes every background job, any other
   heavy Python script of yours and safe background apps (OneDrive by default) so a game gets the CPU and memory,
   and puts everything back when you switch it off. A pop-up says what was frozen and how much memory it freed.
@@ -129,7 +131,7 @@ Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\p
 |---|---|
 | `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
 | `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
-| `monitor\hunter.py` | the header (after `khaltron-header.css`): the robot watching your six busiest programs on its ledge; cyan in monitor mode, red when gaming mode hunts |
+| `monitor\hunter.py` | the header, built to `design/khaltron-header/` (its README is the spec): the raccoon, its eyes and beams, the cards, the gaming-mode sequence |
 | `monitor\hud.py` | the stat cards with live graphs, the job cards, the overview parts |
 | `monitor\theme.py` | every colour and font, the logo, the dark title bar |
 | `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |
@@ -144,3 +146,7 @@ Run the tests with `.venv\Scripts\python.exe -m pytest`.
 ## License
 
 [MIT](LICENSE): free to use, copy, change and share.
+
+The bundled fonts are under the SIL Open Font License: Orbitron (The Orbitron Project Authors) and
+JetBrains Mono (The JetBrains Mono Project Authors); their licences are in `assets/fonts/`. They are
+loaded privately when Khaltron starts; nothing is installed in Windows.

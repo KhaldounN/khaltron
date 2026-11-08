@@ -1,556 +1,670 @@
-"""The Khaltron 9000 header, after the owner's design (khaltron-header.css): a robot behind a ledge, watching the
-PC's programs as six cards lined up on the ledge, with the gaming-mode toggle in its top-right corner.
+"""The Khaltron 9000 header, built to the owner's design package (design/khaltron-header/: README.md is the spec,
+khaltron-header.js the behaviour, khaltron-header.css the looks): a mechanical raccoon robot gripping a steel
+ledge, watching up to six apps that stand as cards on the ledge, with the gaming-mode button top right.
 
-Two modes, as in the design:
-- MONITOR (gaming mode off): cyan. The eyes glow softly and look from card to card; two scan beams follow the
-  eyes; the card being looked at says SCANNING. A few motes drift up.
-- HUNT (gaming mode on): red. The camera pushes in and shakes, the picture turns red and dark with a red vignette,
-  the eyelids close to slits, the beams turn into lasers and target every card in turn ("LOCKED"); paused programs
-  say PAUSED. Then, as the design's "phase-locked" state: everything stops, red, staring down. (A still header
-  costs no CPU while you play.)
+The design is a web page; this is the same thing on a tkinter Canvas, in the design's own 1600 x 320 coordinates
+scaled to the window's width (5:1, like the design):
+- Still parts, painted once per mode with Pillow (a Canvas has no blending or blur): the dark radial background,
+  the steel ledge band, the artwork (960 x 320 at x 320, its outer 14% faded into the dark), the film grain; for
+  gaming mode also the 6% push-in toward the eyes, the red colour grade, darkening by 30% and the red vignette.
+- Live parts on top, as in the design's SVG: eye glow, pupils that follow the gaze, the red eyes and angry lids of
+  gaming mode, a scan beam from each eye (and a laser in gaming mode), drifting dust, the cards, the brand and the
+  button.
 
-The design is a web page (CSS + an SVG over a photo); tkinter has no blending or blur, so the parts that never move
-(the robot, the ledge, the red grade, the vignette, the grain) are painted once per size and mode into a picture
-with Pillow, and only small shapes move on top. The design's photo is not in the project: the robot is drawn
-here. A photo saved as assets/header.jpg (1600 x 533, like the design) is used instead when it exists.
+Behaviour (the design's state machine and timings, KhaltronHeader.TIMING in the JS):
+- Monitor mode (phase "watch"): cyan. Every 1.8 s the robot looks at another card; that card gets a cyan
+  highlight. Every card says MONITORED.
+- Gaming mode, played once: "sweep" (it glares at each card: look 380 ms, the card flashes WARNED, 260 ms, the next;
+  the card looked at lifts, gets red corner brackets and a blinking TERMINATE? badge; cards not reached yet say
+  SCANNING...), then "pausing" (800 ms after the last warning: it looks straight down, the beams flood every card,
+  all cards flash PAUSED), then "locked" (1.3 s later): everything stops, red, staring down. on_locked fires there:
+  the app freezes the jobs at that moment, as the design's README asks.
+- Exit gaming mode at any time with the button.
 
-Everything is laid out in the design's own 1600 x 533 coordinates and mapped onto the header's real size: the
-robot keeps its proportions (centred), the cards, wordmark and toggle spread with the width."""
+Honest cards: in gaming mode the cards are what gaming mode really pauses (your background jobs, OneDrive...) first,
+then your other apps. The robot warns them all, as in the design, but only the paused ones say PAUSED; the others
+(your browser, Claude...) say SPARED. Once the jobs are frozen, the cards follow what was really frozen."""
 
 import math
 import random
+import threading
 import time
 import tkinter as tk
 import tkinter.font as tkfont
-from pathlib import Path
+from dataclasses import dataclass
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageTk
 
 from . import theme
 from .config import HOME
 
+NATIVE_W, NATIVE_H = 1600, 320
 CYAN, RED = "#35E0FF", "#FF3B3B"
-INK, TEXT, MUTED = "#05070A", "#DCE7F0", "#93A5B6"
-DESIGN_W, DESIGN_H = 1600, 533
-EYES = [(741, 192), (856, 187)]                    # the design's eye centres
-SLOTS = [24, 190, 652, 818, 1270, 1436]            # the design's card slots (left edges); hands sit in the gaps
-CARD_TOP, CARD_W, CARD_H = 452, 150, 70
-LOOK = [(-3, 2), (-2.5, 2), (-1, 2.5), (1, 2.5), (2.5, 2), (3, 2)]  # pupil offsets per card (design px)
-PHOTO = HOME / "assets" / "header.jpg"
-WORD = "Bahnschrift"  # Windows' squared, technical typeface: closest to the design's Orbitron
-STATUS = {"monitored": ("● MONITORED", "#7FE9FF"), "scanning": ("◎ SCANNING", "#C2AEAE"),
-          "warned": ("▲ WARNED", "#FF7A7A"), "paused": ("❚❚ PAUSED", "#FFB3B3")}
-WARN_CPU = 25  # a program over this much of the CPU is WARNED
+EYES = [(765, 115), (834, 112)]
+CAM = (799, 114)          # the push-in's origin
+SLOTS = [96, 226, 681, 811, 1254, 1384]
+CARD_TOP, CARD_W, CARD_H = 268, 120, 48
+ANGLES = [74.5, 70.9, 18, -22, -70.9, -74.6]                 # beam rotation per card (degrees, CSS rotate)
+PUPIL = [(-2, 1.2), (-1.6, 1.2), (-.8, 1.6), (.8, 1.6), (1.6, 1.2), (2, 1.2)]
+DOWN = "c"                # look straight down at all cards
+LIDS = [[(747.4, 98.2), (783.4, 98.2), (783.4, 113.8), (747.4, 104.6)],
+        [(816, 96), (852, 96), (852, 102.4), (816, 111.2)]]
+TIMING = {"idleStep": 1800, "firstIdle": 1200, "sweepStart": 450, "lookToWarn": 380, "warnToNext": 260,
+          "afterLastWarn": 800, "pausingToLocked": 1300}
+STATUS = {"monitored": ("● MONITORED", "#7FE9FF"), "scanning": ("SCANNING…", "#C2AEAE"),
+          "warned": ("⚠ WARNED", "#FF7A7A"), "paused": ("❚❚ PAUSED", "#FFB3B3"),
+          "spared": ("○ SPARED", "#9AA6B2")}
+ART = HOME / "assets" / "khaltron-raccoon.jpg"
+CATEGORIES = [("chrome", "BROWSER"), ("edge", "BROWSER"), ("firefox", "BROWSER"), ("brave", "BROWSER"),
+              ("opera", "BROWSER"), ("python", "JOBS"), ("claude", "AI"), ("discord", "CHAT"), ("slack", "CHAT"),
+              ("teams", "MEETINGS"), ("zoom", "MEETINGS"), ("outlook", "MAIL"), ("spotify", "MUSIC"),
+              ("onedrive", "SYNC"), ("steam", "GAMES"), ("epic", "GAMES"), ("code", "CODE"), ("terminal", "SHELL"),
+              ("powershell", "SHELL"), ("explorer", "FILES"), ("defender", "SECURITY"), ("windows", "SYSTEM"),
+              ("node", "RUNTIME"), ("obs", "STREAM"), ("word", "DOCS"), ("excel", "SHEETS"), ("task manager", "SYSTEM")]
 
 
-def _rgb(colour: str) -> tuple:
-    return theme._rgb(colour)
+@dataclass
+class Card:
+    name: str
+    tag: str
+    load: float            # 0..1 (its share of the CPU)
+    pids: tuple = ()
+    pausable: bool = False  # gaming mode pauses it (your background jobs, OneDrive...); the others are spared
+
+
+def card_for(program) -> Card:
+    """A Programs-on-this-PC row as a card: short name, a category tag, the CPU share as the load bar."""
+    name = program.name.replace(" (incl. your background jobs)", " jobs")
+    lower = name.lower()
+    tag = next((t for key, t in CATEGORIES if key in lower), "APP")
+    return Card(name, tag, max(0.03, min(1.0, program.cpu / 100)), tuple(program.pids))
+
+
+# --- the still picture -------------------------------------------------------------------------------------------
+_native: dict[bool, Image.Image] = {}
+_scaled: dict[tuple, Image.Image] = {}
+_lock = threading.Lock()
+
+
+def _native_scene(hunt: bool) -> Image.Image:
+    """The still picture at the design's 1600 x 320, for monitor or gaming mode (cached)."""
+    with _lock:
+        if hunt in _native:
+            return _native[hunt]
+        # the dark background: radial-gradient(ellipse at 50% 30%, #15181D 0%, #07080A 70%)
+        radial = Image.radial_gradient("L").resize((int(NATIVE_W * 1.4), int(NATIVE_H * 2.2)))
+        left, top = int(NATIVE_W * .5 - radial.width / 2), int(NATIVE_H * .3 - radial.height / 2)
+        mask = Image.new("L", (NATIVE_W, NATIVE_H), 255)
+        mask.paste(radial.point(lambda v: min(255, int(v / .70))), (left, top))
+        img = Image.composite(Image.new("RGB", mask.size, "#07080A"), Image.new("RGB", mask.size, "#15181D"), mask)
+        # the steel ledge band across the full width: linear-gradient(#4A4D52 0, #2C2E32 3px, #1F2125 40%, #141518)
+        ledge = ImageDraw.Draw(img)
+        for y in range(263, NATIVE_H):
+            d = y - 263
+            if d < 3:
+                c = theme.mix("#4A4D52", "#2C2E32", d / 3)
+            elif d < 57 * .4:
+                c = theme.mix("#2C2E32", "#1F2125", (d - 3) / (57 * .4 - 3))
+            else:
+                c = theme.mix("#1F2125", "#141518", (d - 57 * .4) / (57 * .6))
+            ledge.line([(0, y), (NATIVE_W, y)], fill=c)
+        # the artwork: 960 x 320 at x 320, its outer 14% on each side faded into the background
+        if ART.exists():
+            art = Image.open(ART).convert("RGB").resize((960, 320), Image.LANCZOS)
+            fade = Image.new("L", (960, 1))
+            for x in range(960):
+                t = x / 959
+                fade.putpixel((x, 0), int(255 * min(1, t / .14, (1 - t) / .14)))
+            img.paste(art, (320, 0), fade.resize((960, 320)))
+        if hunt:
+            # the camera pushes in 6% toward the eyes (the cards and brand stay put; they are drawn live)
+            z, (cx, cy) = 1.06, CAM
+            box = (cx - cx / z, cy - cy / z, cx + (NATIVE_W - cx) / z, cy + (NATIVE_H - cy) / z)
+            img = img.resize((NATIVE_W, NATIVE_H), Image.LANCZOS, box=box)
+            # colour grade #FF2A2A at .38 (CSS mix-blend-mode: color keeps the brightness, takes the hue)
+            grey = img.convert("L")
+            red = Image.merge("RGB", (grey.point(lambda v: min(255, int(v * 1.55))), grey.point(lambda v: int(v * .32)),
+                                      grey.point(lambda v: int(v * .32))))
+            img = Image.blend(img, red, .38)
+            img = ImageEnhance.Brightness(img).enhance(.7)  # the 30% darkening
+            # the red vignette: inset 0 0 130px rgba(255,30,30,.45)
+            edge = Image.new("L", img.size, 0)
+            ImageDraw.Draw(edge).rectangle((0, 0, NATIVE_W - 1, NATIVE_H - 1), outline=255, width=60)
+            edge = edge.filter(ImageFilter.GaussianBlur(55)).point(lambda v: int(v * .45))
+            img = Image.composite(Image.new("RGB", img.size, (255, 30, 30)), img, edge)
+        # film grain (.12, overlay)
+        noise = Image.effect_noise(img.size, 45).convert("RGB")
+        img = Image.blend(img, ImageChops.overlay(img, noise), .12)
+        _native[hunt] = img
+        return img
+
+
+def scene(width: int, hunt: bool) -> Image.Image:
+    key = (width, hunt)
+    if key not in _scaled:
+        height = round(width * NATIVE_H / NATIVE_W)
+        _scaled[key] = _native_scene(hunt).resize((width, height), Image.LANCZOS)
+        if len(_scaled) > 6:
+            _scaled.pop(next(iter(_scaled)))
+    return _scaled[key]
 
 
 def _round_rect(x0, y0, x1, y1, r):
-    """Points for a rounded rectangle drawn as a smoothed polygon."""
     return [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1, x1 - r, y1, x0 + r, y1, x0, y1,
             x0, y1 - r, x0, y0 + r, x0, y0]
 
 
-# --- the still picture (robot, ledge, grade, vignette, grain), painted once per size and mode ---------------------
-def _robot(scale: float = 2.0) -> Image.Image:
-    """The robot in the design's coordinates (painted at `scale` for smooth edges): a metal skull with two eye
-    sockets, a jaw, a neck of cables, shoulders, a ledge, and two hands gripping the ledge between the cards."""
-    w, h = int(DESIGN_W * scale), int(DESIGN_H * scale)
-    img = Image.new("RGB", (w, h), INK)
-
-    def S(points):
-        return [(x * scale, y * scale) for x, y in points]
-
-    def metal(mask: Image.Image, top: str, bottom: str, light=(799, 90), shine=0.35):
-        """Fill a shape with a vertical metal gradient and a soft highlight."""
-        grad = Image.linear_gradient("L").resize((w, h))
-        a, b = Image.new("RGB", (w, h), top), Image.new("RGB", (w, h), bottom)
-        fill = Image.composite(b, a, grad)
-        # the highlight is blurred at a quarter of the size, then enlarged: the same soft light, ~16x less work
-        q = 4
-        glow = Image.new("L", (w // q, h // q), 0)
-        lx, ly = light
-        ImageDraw.Draw(glow).ellipse([(lx - 120) * scale / q, (ly - 70) * scale / q, (lx + 120) * scale / q,
-                                      (ly + 70) * scale / q], fill=int(255 * shine))
-        glow = glow.filter(ImageFilter.GaussianBlur(40 * scale / q)).resize((w, h), Image.BILINEAR)
-        fill = Image.composite(Image.new("RGB", (w, h), "#9aa6b6"), fill, glow)
-        img.paste(fill, (0, 0), mask)
-
-    def shape(draw_fn) -> Image.Image:
-        mask = Image.new("L", (w, h), 0)
-        draw_fn(ImageDraw.Draw(mask))
-        return mask
-
-    # faint background structure: a dark room with vertical panels
-    d = ImageDraw.Draw(img)
-    for x in range(0, DESIGN_W, 80):
-        d.line(S([(x, 0), (x, 440)]), fill="#0a0e14", width=int(2 * scale))
-    # shoulders and chest plate (behind the head)
-    metal(shape(lambda m: m.polygon(S([(470, 520), (560, 360), (700, 330), (900, 330), (1040, 360), (1130, 520)]),
-                                    fill=255)), "#2a313c", "#0b0e13", light=(799, 360), shine=0.18)
-    d = ImageDraw.Draw(img)
-    for x in (640, 700, 900, 960):  # chest plate seams
-        d.line(S([(x, 350), (x + (x - 800) * 0.25, 520)]), fill="#06080b", width=int(3 * scale))
-    # neck: hydraulic cables
-    for x in (742, 770, 799, 828, 856):
-        metal(shape(lambda m, x=x: m.rounded_rectangle(S([(x - 11, 300), (x + 11, 400)]), radius=8 * scale, fill=255)),
-              "#3b4452", "#11151b", light=(x, 320), shine=0.25)
-    # the skull
-    skull = shape(lambda m: (m.ellipse(S([(669, 32), (929, 300)]), fill=255),
-                             m.polygon(S([(690, 200), (908, 200), (880, 300), (718, 300)]), fill=255)))
-    metal(skull, "#4a5463", "#141820", light=(780, 95), shine=0.55)
-    d = ImageDraw.Draw(img)
-    # temple plates and cranium seam
-    d.arc(S([(689, 52), (909, 280)]), 200, 340, fill="#20262f", width=int(3 * scale))
-    d.line(S([(799, 36), (799, 118)]), fill="#20262f", width=int(2 * scale))
-    # brow ridge: one angled plate over both eyes (angry, sloping down to the middle)
-    metal(shape(lambda m: m.polygon(S([(690, 152), (790, 176), (808, 176), (908, 148), (912, 166), (808, 194),
-                                       (790, 194), (688, 172)]), fill=255)), "#5a6576", "#232a34",
-          light=(799, 160), shine=0.4)
-    d = ImageDraw.Draw(img)
-    # eye sockets (the eyes themselves are drawn live on top)
-    for ex, ey in EYES:
-        d.ellipse(S([(ex - 31, ey - 19), (ex + 31, ey + 19)]), fill="#020304")
-        d.ellipse(S([(ex - 31, ey - 19), (ex + 31, ey + 19)]), outline="#262d37", width=int(2 * scale))
-    # nose cavity
-    d.polygon(S([(788, 222), (810, 222), (799, 246)]), fill="#030405")
-    # cheekbones
-    d.line(S([(704, 228), (760, 248), (782, 262)]), fill="#1b2028", width=int(3 * scale))
-    d.line(S([(894, 224), (838, 246), (816, 262)]), fill="#1b2028", width=int(3 * scale))
-    # jaw and teeth
-    metal(shape(lambda m: m.rounded_rectangle(S([(728, 262), (870, 318)]), radius=14 * scale, fill=255)),
-          "#3c4553", "#101318", light=(799, 270), shine=0.3)
-    d = ImageDraw.Draw(img)
-    d.rectangle(S([(744, 274), (854, 296)]), fill="#06080b")
-    for x in range(748, 852, 9):
-        d.rectangle(S([(x, 276), (x + 6, 294)]), fill="#c9d0d8" if x % 2 else "#b4bcc6")
-    d.line(S([(744, 285), (854, 285)]), fill="#06080b", width=int(2 * scale))
-    # the ledge the cards stand on
-    metal(shape(lambda m: m.rectangle(S([(0, 440), (DESIGN_W, DESIGN_H)]), fill=255)), "#1a2029", "#07090c",
-          light=(799, 445), shine=0.15)
-    d = ImageDraw.Draw(img)
-    d.line(S([(0, 440), (DESIGN_W, 440)]), fill="#3d4756", width=int(2 * scale))
-    # hands gripping the ledge, in the gaps between the cards
-    for cx in (496, 1119):
-        metal(shape(lambda m, cx=cx: m.rounded_rectangle(S([(cx - 70, 392), (cx + 70, 444)]), radius=18 * scale,
-                                                        fill=255)), "#47515f", "#1a1f27", light=(cx, 400), shine=0.4)
-        for i in range(4):  # fingers curling over the edge
-            fx = cx - 55 + i * 37
-            metal(shape(lambda m, fx=fx: m.rounded_rectangle(S([(fx - 13, 420), (fx + 13, 482)]), radius=10 * scale,
-                                                            fill=255)), "#56616f", "#1d232c", light=(fx, 430),
-                  shine=0.35)
-            d = ImageDraw.Draw(img)
-            d.line(S([(fx - 12, 452), (fx + 12, 452)]), fill="#151a21", width=int(2 * scale))
-        d.line(S([(cx - 64, 405), (cx + 64, 405)]), fill="#20262f", width=int(2 * scale))
-    return img
+def _ease(k: float) -> float:
+    """cubic-bezier(.3,.9,.3,1), close enough: a quick start that settles softly."""
+    k = max(0.0, min(1.0, k))
+    return 1 - (1 - k) ** 3
 
 
-_scene_cache: dict = {}
-
-
-ROBOT_VERSION = 1  # bump when _robot() changes: the picture saved on disk is then painted again
-ROBOT_FILE = HOME / "state" / f"header-robot-v{ROBOT_VERSION}.png"
-_base: Image.Image | None = None
-
-
-def base_picture() -> Image.Image:
-    """The design's photo if saved, else the painted robot: painted once, then kept on disk (painting it takes
-    a second or two; loading it a few milliseconds)."""
-    global _base
-    if _base is None:
-        if PHOTO.exists():
-            _base = Image.open(PHOTO).convert("RGB").resize((DESIGN_W, DESIGN_H))
-        elif ROBOT_FILE.exists():
-            _base = Image.open(ROBOT_FILE).convert("RGB")
-        else:
-            _base = _robot().resize((DESIGN_W, DESIGN_H), Image.LANCZOS)
-            ROBOT_FILE.parent.mkdir(parents=True, exist_ok=True)
-            _base.save(ROBOT_FILE)
-    return _base
-
-
-def scene(width: int, height: int, hunt: bool) -> Image.Image:
-    """The still picture at this size: the robot (or the design's photo, if saved), centred and scaled to the
-    height, the ledge stretched to the width; in hunt mode zoomed in 6%, red-graded, darker, with a red vignette.
-    Film grain on both. Cached per size and mode."""
-    key = (width, height, hunt)
-    if key in _scene_cache:
-        return _scene_cache[key]
-    base = base_picture()
-    if hunt:  # the camera pushes in around the eyes
-        z = 1.06
-        cx, cy = 799, 190
-        box = (cx - cx / z, cy - cy / z, cx + (DESIGN_W - cx) / z, cy + (DESIGN_H - cy) / z)
-        base = base.resize((DESIGN_W, DESIGN_H), Image.LANCZOS, box=box)
-    s = height / DESIGN_H
-    out = Image.new("RGB", (width, height), INK)
-    robot = base.resize((max(1, int(DESIGN_W * s)), height), Image.LANCZOS)
-    out.paste(robot, ((width - robot.width) // 2, 0))
-    # the ledge runs the full width (the robot picture is narrower than a wide window)
-    ledge = base.crop((0, 440, 300, DESIGN_H)).resize((max(1, int(300 * s)), height - int(440 * s)))
-    for x in list(range(0, (width - robot.width) // 2, ledge.width)) + \
-            list(range((width + robot.width) // 2, width, ledge.width)):
-        out.paste(ledge, (x, int(440 * s)))
-    if hunt:
-        grey = out.convert("L").convert("RGB")
-        red = ImageChops.multiply(grey, Image.new("RGB", out.size, (255, 70, 70)))
-        out = Image.blend(out, red, 0.38)                               # the red grade
-        out = ImageEnhance.Brightness(out).enhance(0.7)                 # darken .3
-        vignette = Image.new("L", out.size, 0)
-        ImageDraw.Draw(vignette).rectangle((0, 0, width, height), outline=255, width=int(70 * s) + 10)
-        vignette = vignette.filter(ImageFilter.GaussianBlur(60 * s + 10))
-        out = Image.composite(Image.new("RGB", out.size, (150, 12, 12)), out, vignette.point(lambda v: v * 0.55))
-    noise = Image.effect_noise(out.size, 40).convert("RGB")
-    out = Image.blend(out, ImageChops.overlay(out, noise), 0.12)        # grain
-    _scene_cache.clear() if len(_scene_cache) > 6 else None
-    _scene_cache[key] = out
-    return out
-
-
-# --- the live header ------------------------------------------------------------------------------------------------
+# --- the live header --------------------------------------------------------------------------------------------------
 class KhaltronHeader(tk.Canvas):
-    """The header. The window calls status(), show_programs() and set_state(); a click on the toggle calls
-    `on_toggle` (the window switches gaming mode in the background)."""
+    """The window gives it: set_programs() (the monitor-mode cards), set_state() (gaming mode as the app sees it,
+    maybe switched elsewhere: hotkey, tray, Claude), mark_frozen() (which cards really got paused). It calls back:
+    on_locked(cards) when the gaming sequence locks (time to freeze the jobs), on_exit() when the user leaves gaming
+    mode, and targets() for the cards gaming mode will pause."""
 
-    FPS_MS = 90
+    FRAME_MS = 90
 
-    def __init__(self, parent, on_toggle, height: int = 250):
-        super().__init__(parent, height=height, bg=INK, highlightthickness=0)
-        self.on_toggle = on_toggle
-        self.on, self.busy, self.hover = False, False, False
-        self.width, self.height = 1000, height
-        self.cards_data: list = []
-        self.counts = (0, 0, False)
-        self.target, self.look_from, self.look_to, self.look_since = 0, (0.0, 0.0), (0.0, 0.0), 0.0
-        self.beam_from = self.beam_to = None
-        self.hunt_since: float | None = None
-        self.locked = False
+    def __init__(self, parent, on_locked, on_exit, targets):
+        super().__init__(parent, height=200, bg=theme.BG, highlightthickness=0)
+        self.on_locked_cb, self.on_exit_cb, self.targets_cb = on_locked, on_exit, targets
+        self.width = 0
+        self.hunt, self.phase, self.look, self.warned = False, "watch", 2, -1
+        self.user_engaged = False          # the user clicked: the real freeze waits for "locked"
+        self.busy = False                  # the app is switching gaming mode in the background
+        self.cards: list[Card] = []        # monitor-mode cards (live data)
+        self.hunt_cards: list[Card] = []   # gaming-mode cards (fixed for the sequence)
+        self.frozen_names: set[str] | None = None
+        self.flash: dict[int, tuple[float, str]] = {}
+        self.timer = None
+        self.gaze = {"angle": ANGLES[2], "scale": 1.0, "pupil": PUPIL[2], "from": None, "since": 0.0}
+        self.hover = False
+        self.mode_line, self.banner, self.button_items = [], [], []
         self.started = time.time()
         self.bind("<Configure>", self._resized)
-        self.after(self.FPS_MS, self.tick)
+        self._schedule(self._idle_step, TIMING["firstIdle"])
+        self.after(self.FRAME_MS, self._tick)
 
-    # coordinates: the robot keeps its shape (centred, scaled to the height); cards and edges spread with the width
+    # --- geometry: the design's coordinates, scaled to the width ---------------------------------------------------
     @property
-    def s(self) -> float:
-        return self.height / DESIGN_H
+    def S(self) -> float:
+        return self.width / NATIVE_W
 
-    def rx(self, x: float) -> float:   # robot x
-        return self.width / 2 + (x - 800) * self.s
+    def P(self, x, y):
+        return x * self.S, y * self.S
 
-    def ry(self, y: float) -> float:
-        return y * self.s
-
-    def cx(self, x: float) -> float:   # card / edge x, stretched to the width
-        return x * self.width / DESIGN_W
+    def cam(self, x, y):
+        """Where a point of the robot shows: in gaming mode the camera is pushed in 6% around CAM."""
+        if self.hunt:
+            x, y = CAM[0] + (x - CAM[0]) * 1.06, CAM[1] + (y - CAM[1]) * 1.06
+        return self.P(x, y)
 
     @property
     def accent(self) -> str:
-        return RED if self.on else CYAN
+        return RED if self.hunt else CYAN
 
     def _resized(self, event):
-        if (event.width, event.height) != (self.width, self.height):
-            self.width, self.height = event.width, event.height
+        if event.width != self.width and event.width > 50:
+            self.width = event.width
+            self.configure(height=round(event.width * NATIVE_H / NATIVE_W))
             self.build()
-            # the other mode's picture, painted in the background now, so switching is instant
-            import threading
-            size = (self.width, self.height)
-            threading.Thread(target=lambda: scene(size[0], size[1], not self.on), daemon=True).start()
+            other = (event.width, not self.hunt)
+            threading.Thread(target=lambda: scene(*other), daemon=True).start()  # the other mode, ready to switch
 
-    # --- building ----------------------------------------------------------------------------------------------------
+    # --- building ------------------------------------------------------------------------------------------------
     def build(self):
-        """All shapes, made once per size and mode; animation only moves and recolours them."""
+        if not self.width:
+            return
         self.delete("all")
-        hunt = self.on
-        self.photo = ImageTk.PhotoImage(scene(self.width, self.height, hunt))
-        self.create_image(0, 0, image=self.photo, anchor="nw")
-        s, a = self.s, self.accent
-        rng = random.Random(7)
-        self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(0, self.width),
-                       rng.uniform(self.ry(120), self.ry(440)), rng.uniform(0, 10)) for _ in range(9)]
-        # scan beams (from each eye to the card looked at) and the thin lasers of hunt mode
-        self.beams = [self.create_polygon(0, 0, 0, 0, 0, 0, fill=a, outline="", stipple="gray25") for _ in EYES]
-        self.lasers = [self.create_line(0, 0, 0, 0, fill=a, width=2, state="normal" if hunt else "hidden")
-                       for _ in EYES]
-        # the eyes: glow rings, iris, hot pupil; the lids of hunt mode
+        S, a = self.S, self.accent
+        self.photo = ImageTk.PhotoImage(scene(self.width, self.hunt))
+        self.scene_item = self.create_image(0, 0, image=self.photo, anchor="nw")
+        self.shaken = (0.0, 0.0)
+        # eye overlays (in the camera layer: they move with the push-in and the shake)
         self.eyes = []
-        for ex, ey in EYES:
-            x, y = self.rx(ex), self.ry(ey)
-            glows = [self.create_oval(x - r * s, y - r * s * .7, x + r * s, y + r * s * .7, fill=INK, outline="")
-                     for r in (44, 34, 25)]
-            iris = self.create_oval(x - 15 * s, y - 15 * s, x + 15 * s, y + 15 * s, fill=a, outline="")
-            pupil = self.create_oval(0, 0, 0, 0, fill="#ffffff", outline="")
-            lid = self.create_polygon(x - 33 * s, y - 22 * s, x + 33 * s, y - 22 * s, x + 33 * s, y - 22 * s,
-                                      x - 33 * s, y - 22 * s, fill="#020304", outline="")
-            low = self.create_polygon(x - 33 * s, y + 22 * s, x + 33 * s, y + 22 * s, x + 33 * s, y + 22 * s,
-                                      x - 33 * s, y + 22 * s, fill="#020304", outline="")
-            self.eyes.append({"x": x, "y": y, "glows": glows, "iris": iris, "pupil": pupil, "lid": lid, "low": low})
-        # the cards on the ledge
+        for i, (ex, ey) in enumerate(EYES):
+            x, y = self.cam(ex, ey)
+            glow = [self.create_oval(x - r * S, y - r * S, x + r * S, y + r * S, outline=a, width=max(1, 2 * S))
+                    for r in (13, 9.5)]
+            red = [self.create_oval(x - 7 * S, y - 7 * S, x + 7 * S, y + 7 * S, fill="#0A0204", outline=""),
+                   self.create_oval(x - 5.6 * S, y - 5.6 * S, x + 5.6 * S, y + 5.6 * S, outline=RED,
+                                    width=max(1, 1.6 * S))]
+            for item in red:
+                self.itemconfigure(item, state="normal" if self.hunt else "hidden")
+            pupil = [self.create_oval(0, 0, 0, 0, fill=a, outline=""), self.create_oval(0, 0, 0, 0, fill="#ffffff",
+                                                                                      outline="")]
+            lid = self.create_polygon(*[c for p in LIDS[i] for c in self.cam(*p)], fill="#08090B", outline="",
+                                      state="normal" if self.hunt else "hidden")
+            self.eyes.append({"x": x, "y": y, "glow": glow, "pupil": pupil, "lid": lid, "red": red})
+        self.camera_items = [self.scene_item] + [i for e in self.eyes for i in e["glow"] + e["red"] + e["pupil"] +
+                                                 [e["lid"]]]
+        # beams and lasers (their own layer, over the camera)
+        self.beams = [self.create_polygon(0, 0, 0, 0, 0, 0, fill=a, outline="", stipple="gray12") for _ in EYES]
+        self.lasers = [self.create_line(0, 0, 0, 0, fill="#FF6A6A", width=max(1, 2 * S), state="hidden")
+                       for _ in EYES]
+        self.beams_ready = False
+        # dust motes drifting up
+        rng = random.Random(11)
+        self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(40, 1560), rng.uniform(90, 250),
+                       rng.uniform(0, 10), rng.uniform(8, 13)) for _ in range(14)]
+        # the cards
         self.card_items = []
-        top = self.ry(CARD_TOP) if self.height >= 300 else self.height - CARD_H * max(s, .62) - 6
-        ch = max(54, CARD_H * s * 1.0) if self.height >= 300 else self.height - top - 4
+        name_font = tkfont.Font(family=theme.MONO + (" SemiBold" if theme.MONO == "JetBrains Mono" else ""),
+                                size=-max(9, round(12 * S)))
+        tag_font = tkfont.Font(family=theme.MONO, size=-max(8, round(9 * S)))
+        status_font = tkfont.Font(family=theme.MONO, size=-max(8, round(9 * S)), weight="bold")
+        badge_font = tkfont.Font(family=theme.MONO, size=-max(8, round(10 * S)), weight="bold")
+        self.fonts = {"name": name_font, "tag": tag_font, "badge": badge_font}
         for slot in SLOTS:
-            x0 = self.cx(slot)
-            x1 = x0 + max(96, self.cx(slot + CARD_W) - x0)
-            items = {"box": self.create_polygon(*_round_rect(x0, top, x1, top + ch, 7), smooth=True,
-                                               fill="#0a1016", outline=a, width=1),
-                     "corners": [self.create_line(x0 - 4, top + 8, x0 - 4, top - 4, x0 + 8, top - 4, fill=RED, width=2,
-                                                  state="hidden"),
-                                 self.create_line(x1 + 4, top + ch - 8, x1 + 4, top + ch + 4, x1 - 8, top + ch + 4,
-                                                  fill=RED, width=2, state="hidden")],
-                     "name": self.create_text(x0 + 9, top + 12, text="", anchor="w", fill="#F2F7FB",
-                                              font=(theme.FONT, 9, "bold")),
-                     "tag": self.create_text(x1 - 8, top + ch - 11, text="", anchor="e", fill=MUTED,
-                                             font=(theme.MONO, 7)),  # bottom right: the name has the top row
-                     "track": self.create_rectangle(x0 + 9, top + ch / 2, x1 - 9, top + ch / 2 + 4,
-                                                    fill="#1a2028", width=0),
-                     "fill": self.create_rectangle(x0 + 9, top + ch / 2, x0 + 9, top + ch / 2 + 4, fill=a, width=0),
-                     "status": self.create_text(x0 + 9, top + ch - 11, text="", anchor="w",
-                                                font=(theme.MONO, 7, "bold")),
-                     "lock": self.create_text(x1 - 10, top - 1, text=" LOCKED ", anchor="e", fill="#1A0404",
-                                              font=(theme.MONO, 7, "bold"), state="hidden"),
-                     "x0": x0, "x1": x1, "top": top, "h": ch}
-            items["lock_bg"] = self.create_rectangle(0, 0, 0, 0, fill=RED, width=0, state="hidden")
-            self.tag_raise(items["lock"])
+            x0, y0 = self.P(slot, CARD_TOP)
+            w, h = CARD_W * S, CARD_H * S
+            pad = 10 * S
+            items = {"x0": x0, "y0": y0, "w": w, "h": h, "dy": 0.0}
+            items["ring"] = self.create_polygon(*_round_rect(x0 - 2, y0 - 2, x0 + w + 2, y0 + h + 2, 10 * S),
+                                                smooth=True, fill="", outline="", width=2, state="hidden")
+            items["box"] = self.create_polygon(*_round_rect(x0, y0, x0 + w, y0 + h, 9 * S), smooth=True,
+                                               fill="#080C12", outline=a, width=1)
+            items["name"] = self.create_text(x0 + pad, y0 + 13 * S, anchor="w", fill="#F2F7FB", font=name_font)
+            items["tag"] = self.create_text(x0 + w - pad, y0 + 13 * S, anchor="e", fill="#93A5B6", font=tag_font)
+            items["track"] = self.create_rectangle(x0 + pad, y0 + 24 * S, x0 + w - pad, y0 + 28 * S,
+                                                   fill="#1A2129", width=0)
+            items["fill"] = self.create_rectangle(x0 + pad, y0 + 24 * S, x0 + pad, y0 + 28 * S, fill=a, width=0)
+            items["status"] = self.create_text(x0 + pad, y0 + 38 * S, anchor="w", font=status_font)
+            k = 12 * S
+            items["corners"] = [self.create_line(x0 - 6 * S, y0 - 6 * S + k, x0 - 6 * S, y0 - 6 * S, x0 - 6 * S + k,
+                                                 y0 - 6 * S, fill=RED, width=2, state="hidden"),
+                                self.create_line(x0 + w + 6 * S, y0 + h + 6 * S - k, x0 + w + 6 * S, y0 + h + 6 * S,
+                                                 x0 + w + 6 * S - k, y0 + h + 6 * S, fill=RED, width=2, state="hidden")]
+            items["badge_bg"] = self.create_polygon(0, 0, 0, 0, 0, 0, smooth=True, fill=RED, outline="",
+                                                    state="hidden")
+            items["badge"] = self.create_text(0, 0, text="TERMINATE?", fill="#1A0404", state="hidden", font=badge_font)
             self.card_items.append(items)
-        # brand: wordmark, mode line, and the blinking banner of hunt mode
-        word = tkfont.Font(family=WORD, size=max(14, int(28 * s * 1.15)), weight="bold")
-        self.create_text(22 + 2, 20 + 2, text="KHALTRON 9000", anchor="nw", font=word, fill="#000000")
-        self.create_text(22, 20, text="KHALTRON 9000", anchor="nw", font=word, fill="#F2F7FB")
-        line_y = 20 + word.metrics("linespace") + 10
-        self.dot = self.create_oval(24, line_y - 4, 32, line_y + 4, fill=a, outline="")
-        self.mode_line = self.create_text(40, line_y, text="", anchor="w", font=(theme.MONO, 8), fill="#B4C3D1")
-        self.banner = self.create_text(22, line_y + 22, text="⚠ HUNT MODE: BACKGROUND PROCESSES SUSPENDED",
-                                       anchor="w", font=(theme.MONO, 8, "bold"), fill="#FF6B6B",
-                                       state="normal" if hunt else "hidden")
-        # the toggle pill (top right)
-        tw, th = 230, 40
-        x1, y0 = self.width - 22, 20
-        self.toggle_box = (x1 - tw, y0, x1, y0 + th)
-        self.toggle_shape = self.create_polygon(*_round_rect(x1 - tw, y0, x1, y0 + th, th / 2), smooth=True,
-                                                width=1, outline=a, fill="#0b1219")
-        self.toggle_text = self.create_text(x1 - tw / 2, y0 + th / 2, text="", font=(WORD, 11, "bold"))
-        for item in (self.toggle_shape, self.toggle_text):
-            self.tag_bind(item, "<Button-1>", lambda e: None if self.busy else self.on_toggle())
-            self.tag_bind(item, "<Enter>", lambda e: self._hover(True))
-            self.tag_bind(item, "<Leave>", lambda e: self._hover(False))
-        self._paint_toggle()
-        self._paint_texts()
+        # brand: wordmark, mode line, banner
+        bx, by = self.P(28, 16)
+        word = tkfont.Font(family=theme.DISPLAY, size=-max(14, round(24 * S)))
+        self._spaced(bx, by, "KHALTRON 9000", word, "#F2F7FB", .08, anchor="nw")
+        line_y = by + word.metrics("linespace") + 9 * S
+        self.dot = self.create_oval(bx, line_y - 4 * S, bx + 8 * S, line_y + 4 * S, fill=a, outline="")
+        self.line_font = tkfont.Font(family=theme.MONO, size=-max(9, round(12 * S)))
+        self.banner_font = tkfont.Font(family=theme.MONO, size=-max(8, round(11 * S)), weight="bold")
+        self.mode_line_at = (bx + 18 * S, line_y)
+        self.banner_at = (bx, line_y + 21 * S)
+        self.mode_line, self.banner, self.button_items = [], [], []
+        self.button_font = tkfont.Font(family=theme.DISPLAY_SEMI, size=-max(10, round(13 * S)))
+        self._paint_text()
+        self._paint_button()
         self._paint_cards()
-        self.look_since = 0  # beams and pupils jump to their place on the next frame
-        self.frame(time.time() - self.started, force=True)
+        self._frame(time.time() - self.started, force=True)
 
-    # --- what the window tells it --------------------------------------------------------------------------------
-    def set_state(self, on: bool, busy: bool | None = None):
-        """Gaming mode on/off (and switching). Turning it on starts the hunt sequence."""
-        if busy is not None and busy != self.busy:
-            self.busy = busy
-            self._paint_toggle()
-        if on != self.on:
-            self.on = on
-            self.locked = False
-            self.build()
-            # the sequence (push in, shake, target each card, lock) starts once its picture is on screen
-            self.hunt_since = time.time() if on else None
+    def _spaced(self, x, y, text, font, colour, spacing_em, anchor="w"):
+        """Text with letter-spacing (the design's .08-.18em), one canvas item per letter. Returns the items."""
+        items, step = [], font.metrics("ascent") * spacing_em
+        for ch in text:
+            items.append(self.create_text(x, y, text=ch, font=font, fill=colour, anchor=anchor))
+            x += font.measure(ch) + step
+        return items
 
-    def status(self, running: int, waiting: int, alert: bool):
-        if (running, waiting, alert) != self.counts:
-            self.counts = (running, waiting, alert)
-            self._paint_texts()
+    # --- the state machine (the design's JS) -------------------------------------------------------------------
+    def _schedule(self, fn, ms):
+        if self.timer is not None:
+            try:
+                self.after_cancel(self.timer)
+            except tk.TclError:
+                pass
+        self.timer = self.after(ms, fn)
 
-    def show_programs(self, programs, frozen: set[int]):
-        """The six busiest programs become the cards on the ledge."""
-        top = sorted(programs, key=lambda p: -p.cpu)[:len(SLOTS)]
-        data = []
-        for p in top:
-            name = p.name.replace(" (incl. your background jobs)", " jobs").replace("Windows: ", "Win: ")
-            paused = bool(frozen and set(p.pids) & frozen)
-            data.append((name, p.cpu, "paused" if paused else "warned" if p.cpu >= WARN_CPU else "monitored"))
-        if data != self.cards_data:
-            self.cards_data = data
+    def _set(self, **changes):
+        before = (self.hunt, self.phase)
+        for key, value in changes.items():
+            setattr(self, key, value)
+        if "look" in changes:
+            self._aim(changes["look"])
+        if (self.hunt, self.phase) != before:
+            self._paint_text()
+            self._paint_button()
+        self._paint_cards()
+        if self.phase == "locked" and before[1] != "locked":
+            self.beams_ready = False
+            self._frame(time.time() - self.started, force=True)  # one last, steady frame: then it stays still
+            if self.user_engaged:
+                self.on_locked_cb(self.hunt_cards)
+
+    def _idle_step(self):
+        if self.phase != "watch":
+            return
+        count = max(1, len(self.cards))
+        n = self.look if isinstance(self.look, int) else 0
+        if count > 1:
+            while n == self.look:
+                n = random.randrange(count)
+        self._set(look=n)
+        self._schedule(self._idle_step, TIMING["idleStep"])
+
+    def engage(self, user: bool):
+        """Start gaming mode's sequence. user=True: the real freeze happens when it locks (on_locked)."""
+        if self.hunt:
+            return
+        self.user_engaged = user
+        # all six cards, as in the design: what gaming mode really pauses first, then the other apps (spared)
+        targets = list(self.targets_cb() or [])
+        names = {c.name for c in targets}
+        self.hunt_cards = (targets + [c for c in self.cards if c.name not in names])[:len(SLOTS)]
+        self.frozen_names = None
+        self.hunt, self.phase, self.warned = True, "sweep", -1
+        self.build()                      # the red picture, pushed in
+        self._paint_text()
+        self._paint_button()
+        self._set(look=0)
+        self._schedule(lambda: self._sweep(0), TIMING["sweepStart"])
+
+    def _sweep(self, k):
+        if not self.hunt:
+            return
+        last = max(0, len(self.hunt_cards) - 1)
+        self._set(look=k)
+
+        def warn():
+            if not self.hunt:
+                return
+            self.flash[k] = (time.time(), "warn")
+            self._set(warned=k)
+            if k < last:
+                self._schedule(lambda: self._sweep(k + 1), TIMING["warnToNext"])
+            else:
+                self._schedule(self._pausing, TIMING["afterLastWarn"])
+        self._schedule(warn, TIMING["lookToWarn"])
+
+    def _pausing(self):
+        if not self.hunt:
+            return
+        for i in range(len(self.hunt_cards)):
+            self.flash[i] = (time.time(), "pause")
+        self._set(phase="pausing", look=DOWN)
+        self._schedule(lambda: self.hunt and self._set(phase="locked"), TIMING["pausingToLocked"])
+
+    def disengage(self, user: bool):
+        if not self.hunt:
+            return
+        self.hunt, self.phase, self.warned, self.user_engaged = False, "watch", -1, False
+        self.frozen_names = None
+        self.flash.clear()
+        self.build()
+        self._set(look=2)
+        self._schedule(self._idle_step, TIMING["firstIdle"])
+        if user:
+            self.on_exit_cb()
+
+    # --- what the window tells it ---------------------------------------------------------------------------------
+    def set_programs(self, cards: list[Card]):
+        cards = cards[:len(SLOTS)]
+        if [(c.name, c.tag, round(c.load, 2)) for c in cards] != [(c.name, c.tag, round(c.load, 2)) for c in self.cards]:
+            self.cards = cards
+            if not self.hunt:
+                self._paint_cards()
+
+    def mark_frozen(self, frozen_pids: set[int]):
+        """Once the jobs are really frozen: the cards that got paused say PAUSED, the others SPARED."""
+        if not self.hunt or self.phase != "locked" or not frozen_pids:
+            return
+        names = {c.name for c in self.hunt_cards if set(c.pids) & frozen_pids}
+        if names != self.frozen_names:
+            self.frozen_names = names
             self._paint_cards()
 
-    # --- painting the parts that change rarely ----------------------------------------------------------------------
+    def set_state(self, on: bool, busy: bool | None = None):
+        """Gaming mode as the app sees it (it may have been switched by the hotkey, the tray or Claude)."""
+        if busy is not None and busy != self.busy:
+            self.busy = busy
+            self._paint_button()
+        if self.busy:
+            return
+        if on and not self.hunt:
+            self.engage(user=False)       # switched elsewhere: play the sequence, nothing more to do
+        elif not on and self.hunt and not (self.user_engaged and self.phase != "locked"):
+            self.disengage(user=False)
+
+    def _click(self, _event=None):
+        if self.busy:
+            return
+        if self.hunt:
+            self.disengage(user=True)
+        else:
+            self.engage(user=True)
+
+    # --- painting what changes rarely -----------------------------------------------------------------------------
+    def _paint_text(self):
+        if not self.width:
+            return
+        for item in self.mode_line + self.banner:
+            self.delete(item)
+        if not self.hunt:
+            line, banner = "MONITOR MODE // WATCHING", ""
+        elif self.phase == "sweep":
+            line, banner = "GAMING MODE // ISSUING WARNINGS", "⚠ GAMING MODE ENGAGED — ISSUING WARNINGS"
+        else:
+            line, banner = "GAMING MODE // ALL PROCESSES PAUSED", "⚠ ALL NON-ESSENTIAL PROCESSES PAUSED"
+        self.mode_line = self._spaced(*self.mode_line_at, line, self.line_font, "#B4C3D1", .18)
+        self.banner = self._spaced(*self.banner_at, banner, self.banner_font, "#FF6B6B", .18) if banner else []
+        self.itemconfigure(self.dot, fill=self.accent)
+
+    def _paint_button(self):
+        if not self.width:
+            return
+        for item in self.button_items:
+            self.delete(item)
+        S = self.S
+        text = "SWITCHING…" if self.busy else ("EXIT GAMING MODE" if self.hunt else "GAMING MODE")
+        tw = self.button_font.measure(text) + len(text) * self.button_font.metrics("ascent") * .12
+        icon_w, pad, gap = 18 * S, 22 * S, 10 * S
+        w, h = tw + icon_w + gap + 2 * pad, 44 * S
+        x1, y0 = self.width - 28 * S, 16 * S
+        x0 = x1 - w
+        if self.hunt:
+            fill = theme.mix(theme.BG, RED, .3 if self.hover else .18)
+            edge, colour = RED, "#FFD9D9"
+        else:
+            fill = theme.mix("#060C12", CYAN, .16) if self.hover else "#081018"
+            edge, colour = CYAN, "#CFF7FF"
+        items = [self.create_polygon(*_round_rect(x0, y0, x1, y0 + h, h / 2), smooth=True, fill=fill, outline=edge)]
+        # the gamepad icon
+        ix, iy = x0 + pad, y0 + h / 2
+        items.append(self.create_polygon(*_round_rect(ix, iy - 5.5 * S, ix + icon_w, iy + 5.5 * S, 5 * S),
+                                         smooth=True, fill="", outline=colour, width=max(1, 2 * S)))
+        items.append(self.create_line(ix + 5 * S, iy - 2.5 * S, ix + 5 * S, iy + 1.5 * S, fill=colour,
+                                      width=max(1, 1.6 * S)))
+        items.append(self.create_line(ix + 3 * S, iy - .5 * S, ix + 7 * S, iy - .5 * S, fill=colour,
+                                      width=max(1, 1.6 * S)))
+        for dx, dy in ((12, -1.5), (14, .5)):
+            items.append(self.create_oval(ix + dx * S - 1.3 * S, iy + dy * S - 1.3 * S, ix + dx * S + 1.3 * S,
+                                          iy + dy * S + 1.3 * S, fill=colour, outline=""))
+        items += self._spaced(ix + icon_w + gap, iy, text, self.button_font, colour, .12)
+        for item in items:
+            self.tag_bind(item, "<Button-1>", self._click)
+            self.tag_bind(item, "<Enter>", lambda e: self._hover(True))
+            self.tag_bind(item, "<Leave>", lambda e: self._hover(False))
+        self.button_items = items
+
     def _hover(self, inside: bool):
-        self.hover = inside
-        self.configure(cursor="hand2" if inside else "")
-        self._paint_toggle()
+        if inside != self.hover:
+            self.hover = inside
+            self.configure(cursor="hand2" if inside else "")
+            self._paint_button()
 
-    def _paint_toggle(self):
-        if not hasattr(self, "toggle_shape"):
-            return
-        on = self.on
-        text = "SWITCHING..." if self.busy else ("■  DISENGAGE GAMING" if on else "▶  GAMING MODE")
-        fill = ("#4a1214" if self.hover else "#2b0d10") if on else ("#0f2a33" if self.hover else "#0b1219")
-        self.itemconfigure(self.toggle_shape, fill=fill, outline=RED if on else CYAN)
-        self.itemconfigure(self.toggle_text, text=text, fill="#FFD9D9" if on else "#CFF7FF")
-
-    def _paint_texts(self):
-        if not hasattr(self, "mode_line"):
-            return
-        running, waiting, alert = self.counts
-        mode = "HUNT MODE · JOBS FROZEN" if self.on else "MONITOR MODE"
-        alert_text = "  ·  ⚠ ALERT" if alert and not self.on else ""
-        self.itemconfigure(self.mode_line, text=f"{mode}  ·  {running} ACTIVE  ·  {waiting} QUEUED{alert_text}")
+    def _status_of(self, i: int) -> str:
+        if self.phase == "watch":
+            return "monitored"
+        if self.phase == "sweep":
+            return "warned" if i <= self.warned else "scanning"
+        card = self.hunt_cards[i]
+        if self.phase == "locked" and self.frozen_names is not None:  # the truth, once the jobs are frozen
+            return "paused" if card.name in self.frozen_names else "spared"
+        return "paused" if card.pausable else "spared"
 
     def _paint_cards(self):
         if not getattr(self, "card_items", None):
             return
+        cards = self.hunt_cards if self.hunt else self.cards
+        S = self.S
         for i, items in enumerate(self.card_items):
-            if i < len(self.cards_data):
-                name, cpu, state = self.cards_data[i]
-                shown = "normal"
-            else:
-                name, cpu, state, shown = "", 0, "monitored", "hidden"
+            show = i < len(cards)
             for key in ("box", "name", "tag", "track", "fill", "status"):
-                self.itemconfigure(items[key], state=shown)
-            room = max(8, int((items["x1"] - items["x0"] - 18) / 7))  # characters that fit the card's width
-            self.itemconfigure(items["name"], text=name[:room] + ("…" if len(name) > room else ""))
-            self.itemconfigure(items["tag"], text=f"{cpu:.0f}% CPU")
-            x0, x1, top, h = items["x0"], items["x1"], items["top"], items["h"]
-            share = max(0.02, min(1.0, cpu / 100))
-            self.coords(items["fill"], x0 + 9, top + h / 2, x0 + 9 + (x1 - x0 - 18) * share, top + h / 2 + 4)
-            items["state"] = state
-        self._paint_targets()
-
-    def _paint_targets(self):
-        """Card borders and status words for the card being looked at (SCANNING / LOCKED)."""
-        a = self.accent
-        for i, items in enumerate(self.card_items):
-            state = items.get("state", "monitored")
-            targeted = i == self.target and not self.locked
-            word = state
-            if targeted and state == "monitored" and not self.on:
-                word = "scanning"
-            text, colour = STATUS[word]
-            if self.on and word == "monitored":
-                colour = "#E8A0A0"  # hunt mode: no cyan left
-            self.itemconfigure(items["status"], text=text, fill=colour)
-            if self.on:
-                outline = RED if targeted else "#7a2026"
-                fill = "#2a0a0d" if targeted else ("#120507" if state == "paused" else "#1a0608")
-            else:
-                outline = CYAN if targeted else "#1d5a66"
-                fill = "#0b1820" if targeted else "#080d12"
-            self.itemconfigure(items["box"], outline=outline, fill=fill, width=2 if targeted else 1)
-            self.itemconfigure(items["fill"], fill="#5C2626" if state == "paused" else a)
-            hunt_target = self.on and targeted and i < len(self.cards_data)
+                self.itemconfigure(items[key], state="normal" if show else "hidden")
+            targeted = show and self.phase in ("watch", "sweep") and self.look == i
+            hunt_target = targeted and self.hunt
             for corner in items["corners"]:
                 self.itemconfigure(corner, state="normal" if hunt_target else "hidden")
-            self.itemconfigure(items["lock"], state="normal" if hunt_target else "hidden")
-            self.itemconfigure(items["lock_bg"], state="normal" if hunt_target else "hidden")
+            badge = "normal" if hunt_target and self.phase == "sweep" else "hidden"
+            self.itemconfigure(items["badge"], state=badge)
+            self.itemconfigure(items["badge_bg"], state=badge)
+            if not show:
+                self.itemconfigure(items["ring"], state="hidden")
+                self._lift(items, 0)
+                continue
+            card = cards[i]
+            room_px = items["w"] - 20 * S - self.fonts["tag"].measure(card.tag) - 6 * S
+            name = card.name
+            while name and self.fonts["name"].measure(name + "…") > room_px:
+                name = name[:-1]
+            self.itemconfigure(items["name"], text=card.name if name == card.name else name.rstrip() + "…")
+            self.itemconfigure(items["tag"], text=card.tag)
+            status = self._status_of(i)
+            text, colour = STATUS[status]
+            self.itemconfigure(items["status"], text=text, fill=colour)
+            x0, y0, w = items["x0"], items["y0"] + items["dy"], items["w"]
+            self.coords(items["fill"], x0 + 10 * S, y0 + 24 * S, x0 + 10 * S + (w - 20 * S) * card.load, y0 + 28 * S)
+            self.itemconfigure(items["fill"], fill="#5C2626" if status == "paused" else (RED if self.hunt else CYAN))
+            if self.hunt:
+                edge = RED if hunt_target else theme.mix("#1A0608", RED, .5)
+                surface = "#120507" if status == "paused" else "#170709"
+            else:
+                edge = theme.mix("#080C12", CYAN, .85 if targeted else .35)
+                surface = "#080C12"
+            self.itemconfigure(items["box"], outline=edge, fill=surface, width=1)
+            ring = theme.mix(theme.BG, RED if hunt_target else CYAN, .35 if hunt_target else .25)
+            self.itemconfigure(items["ring"], outline=ring, state="normal" if targeted else "hidden")
             if hunt_target:
-                bx = self.bbox(items["lock"])
-                if bx:
-                    self.coords(items["lock_bg"], bx[0] - 2, bx[1], bx[2] + 2, bx[3])
-                self.tag_raise(items["lock"])
+                bx1, by = x0 + w - 10 * S, items["y0"] - 11 * S
+                bw = self.fonts["badge"].measure("TERMINATE?") + 18 * S
+                self.coords(items["badge"], bx1 - bw / 2, by + 8 * S)
+                self.coords(items["badge_bg"], *_round_rect(bx1 - bw, by, bx1, by + 16 * S, 8 * S))
+            self._lift(items, -6 * S if hunt_target else 0)
+
+    def _lift(self, items, dy):
+        """The targeted card rises 6px in gaming mode."""
+        move = dy - items["dy"]
+        if move:
+            for key in ("ring", "box", "name", "tag", "track", "fill", "status", "badge", "badge_bg"):
+                self.move(items[key], 0, move)
+            for corner in items["corners"]:
+                self.move(corner, 0, move)
+            items["dy"] = dy
+
+    # --- the gaze: pupils and beams ease to their target in .55 s ----------------------------------------------------
+    def _aim(self, look):
+        g = self.gaze
+        g["from"] = (g["angle"], g["scale"], g["pupil"])
+        if look == DOWN:
+            g["to"] = (0.0, 60.0, (0, 3))
+        else:
+            look = min(look, len(SLOTS) - 1)
+            g["to"] = (ANGLES[look], 1.0, PUPIL[look])
+        g["since"] = time.time()
+        self.beams_ready = False
 
     # --- the animation --------------------------------------------------------------------------------------------
-    def tick(self):
+    def _tick(self):
         try:
-            if self.winfo_viewable() and not self.locked:
-                self.frame(time.time() - self.started)
-            delay = 600 if self.locked else theme.pace(self, self.FPS_MS, background=400)
-            self.after(delay, self.tick)
+            if self.winfo_viewable() and self.width and self.phase != "locked":
+                self._frame(time.time() - self.started)
+            delay = 700 if self.phase == "locked" else theme.pace(self, self.FRAME_MS, background=450)
+            self.after(delay, self._tick)
         except tk.TclError:
             return
 
-    def _aim(self, target):
-        """Start moving the eyes and beams to card `target` (or 'down')."""
-        if target == getattr(self, "aim_at", None):
-            return
-        self.aim_at = target
-        self.look_from = getattr(self, "look_now", (0.0, 0.0))
-        self.look_to = (0.0, 3.0) if target == "down" else LOOK[target]
-        self.beam_from = getattr(self, "beam_now", None)
-        self.look_since = time.time()
-        if target != "down":
-            self.target = target
-        self._paint_targets()
-
-    def frame(self, t: float, force: bool = False):
-        s, a, now = self.s, self.accent, time.time()
-        cards = max(1, len(self.cards_data))
-        # where to look: monitor mode walks the cards every 2.5 s; hunt mode shakes, targets each card, then locks
-        if self.on and self.hunt_since is not None:
-            since = now - self.hunt_since
-            if since < 1.0:
-                self._aim(0)
-            elif since < 1.0 + 0.5 * cards:
-                self._aim(int((since - 1.0) / 0.5))
-            else:
-                self._aim("down")
-                if since > 2.0 + 0.5 * cards and not self.locked:
-                    self.locked = True  # the design's phase-locked state: everything stops, red, staring down
-                    self.move("all", -getattr(self, "shook", (0, 0))[0], -getattr(self, "shook", (0, 0))[1])
-                    self.shook = (0, 0)
-                    self._paint_targets()
-            if since < 1.2:  # the shake when it engages
-                dx, dy = random.choice([(1.5, -1), (-1.5, 1), (1, 1.5), (0, 0)])
-                last = getattr(self, "shook", (0, 0))
-                self.move("all", dx - last[0], dy - last[1])
-                self.shook = (dx, dy)
+    def _frame(self, t: float, force: bool = False):
+        S, a, g = self.S, self.accent, self.gaze
+        locked = self.phase == "locked"
+        # the gaze
+        moving = False
+        if g.get("to"):
+            k = _ease((time.time() - g["since"]) / .55)
+            (a0, s0, p0), (a1, s1, p1) = g["from"], g["to"]
+            g["angle"], g["scale"] = a0 + (a1 - a0) * k, s0 + (s1 - s0) * k
+            g["pupil"] = (p0[0] + (p1[0] - p0[0]) * k, p0[1] + (p1[1] - p0[1]) * k)
+            moving = k < 1
+        # the shake (gaming mode, until it locks): the camera layer jumps by 1.5px
+        if self.hunt and not locked:
+            dx, dy = random.choice([(1.5, -1), (-1.5, 1), (1, 1.5), (0, 0)])
+            dx, dy = dx * S, dy * S
         else:
-            self._aim(int(t / 2.5) % cards)
-        # ease the gaze from where it was to where it goes (0.55 s)
-        k = min(1.0, (now - self.look_since) / 0.55) if self.look_since else 1.0
-        k = 1 - (1 - k) ** 3
-        lx = self.look_from[0] + (self.look_to[0] - self.look_from[0]) * k
-        ly = self.look_from[1] + (self.look_to[1] - self.look_from[1]) * k
-        self.look_now = (lx, ly)
-        # eyes: glow pulse (2.6 s, or 0.5 s hunting), pupils, lids
-        speed = 0.5 if self.on else 2.6
-        pulse = 0.5 + 0.5 * math.sin(t * 2 * math.pi / speed) if not self.locked else 1.0
-        strength = (0.9 if self.on else 0.45) * (0.55 + 0.45 * pulse)
-        lid_k = 1.0 if self.on else 0.0
+            dx, dy = 0.0, 0.0
+        if (dx, dy) != self.shaken:
+            for item in self.camera_items:
+                self.move(item, dx - self.shaken[0], dy - self.shaken[1])
+            self.shaken = (dx, dy)
+        # eyes: glow pulse (2.6 s; .5 s gaming), pupils
+        period = .5 if self.hunt else 2.6
+        pulse = 1.0 if locked else .775 + .225 * math.cos(t * 2 * math.pi / period)
+        strength = (.9 if self.hunt else .45) * pulse
         for eye in self.eyes:
-            x, y = eye["x"], eye["y"]
-            for ring, share in zip(eye["glows"], (0.25, 0.45, 0.75)):
-                self.itemconfigure(ring, fill=theme.mix(INK, a, share * strength))
-            px, py = x + lx * s * 3, y + ly * s * 3
-            r = 5 * s + 1.5
-            self.coords(eye["pupil"], px - r, py - r, px + r, py + r)
-            self.coords(eye["lid"], x - 34 * s, y - 22 * s, x + 34 * s, y - 22 * s, x + 34 * s, y - 22 * s + 14 * s * lid_k,
-                        x, y - 22 * s + 19 * s * lid_k, x - 34 * s, y - 22 * s + 14 * s * lid_k)
-            self.coords(eye["low"], x - 34 * s, y + 22 * s, x + 34 * s, y + 22 * s, x + 34 * s, y + 22 * s - 9 * s * lid_k,
-                        x - 34 * s, y + 22 * s - 9 * s * lid_k)
-        # beams: from each eye to the card looked at (or straight down when locked on)
-        if self.card_items:
-            if self.look_to == (0.0, 3.0):
-                tx0, tx1, ty = None, None, self.height
-            else:
-                items = self.card_items[min(self.target, len(self.card_items) - 1)]
-                tx0, tx1, ty = items["x0"], items["x1"], items["top"]
-            if k < 1 or force or not getattr(self, "beams_set", False) or self.on and not self.locked:
-                for beam, laser, eye in zip(self.beams, self.lasers, self.eyes):
-                    ex, ey = eye["x"] + lx * s * 3, eye["y"] + ly * s * 3
-                    if tx0 is None:
-                        a0, a1 = ex - 60 * s, ex + 60 * s
-                    else:
-                        goal0, goal1 = tx0 + 6, tx1 - 6
-                        prev = self.beam_from or (goal0, goal1)
-                        a0 = prev[0] + (goal0 - prev[0]) * k
-                        a1 = prev[1] + (goal1 - prev[1]) * k
-                    self.coords(beam, ex, ey, a0, ty, a1, ty)
-                    self.coords(laser, ex, ey, (a0 + a1) / 2, ty)
-                    self.beam_now = (a0, a1)
-                    flicker = self.on and not self.locked and int(t * 16) % 2
-                    self.itemconfigure(beam, stipple="gray50" if self.on else "gray25",
-                                       state="hidden" if flicker else "normal")
-                self.beams_set = k >= 1
-        # motes drifting up (monitor mode only: hunt mode is still)
-        for item, x0, y0, phase in self.motes:
-            if self.on:
-                self.itemconfigure(item, state="hidden")
+            for ring, share in zip(eye["glow"], (.55, .9)):
+                self.itemconfigure(ring, outline=theme.mix("#05070A", a, share * strength))
+            ex, ey = eye["x"] + self.shaken[0], eye["y"] + self.shaken[1]
+            px, py = ex + g["pupil"][0] * S, ey + g["pupil"][1] * S
+            for item, r in zip(eye["pupil"], (3.2, 1.5)):
+                self.coords(item, px - r * S, py - r * S, px + r * S, py + r * S)
+        # beams: a cone from each eye, rotated toward the card (scaled wide when looking down); lasers in gaming
+        if moving or force or (self.hunt and not locked) or not self.beams_ready:
+            theta = math.radians(g["angle"])
+            flicker = self.hunt and not locked and int(t * 1000 / 120) % 2
+            for beam, laser, (bx, by) in zip(self.beams, self.lasers, EYES):
+                ox, oy = self.P(bx, by)
+
+                def rot(px, py, ox=ox, oy=oy, bx=bx, by=by):
+                    vx, vy = px - bx, py - by
+                    rx = vx * math.cos(theta) - vy * math.sin(theta)
+                    ry = vx * math.sin(theta) + vy * math.cos(theta)
+                    return ox + rx * S, oy + ry * S
+                half = 25 * g["scale"]
+                self.coords(beam, *rot(bx, by + 4), *rot(bx - half, by + 820), *rot(bx + half, by + 820))
+                wide = g["scale"] > 2  # flooding every card: fainter, so the cards stay readable
+                self.itemconfigure(beam, fill=a, stipple="gray25" if self.hunt and not wide else "gray12",
+                                   state="hidden" if flicker else "normal")
+                self.coords(laser, *rot(bx, by + 8), *rot(bx, by + 805))
+                self.itemconfigure(laser, state="normal" if self.hunt and g["scale"] < 2 else "hidden")
+            self.beams_ready = not moving
+        # dust drifting up (frozen in mid-air once locked)
+        if not locked:
+            for item, x0, y0, phase, dur in self.motes:
+                p = ((t + phase) % dur) / dur
+                x, y = self.P(x0 + 18 * p, y0 - 70 * p)
+                fade = .55 if .2 <= p <= .8 else (p / .2 * .55 if p < .2 else (1 - p) / .2 * .45)
+                r = max(1, 1.2 * S)
+                self.coords(item, x - r, y - r, x + r, y + r)
+                self.itemconfigure(item, fill=theme.mix("#05070A", a, fade))
+        # card flashes: WARNED (a red glow, .6 s) and PAUSED (red fading to dark, .7 s)
+        for i, (since, kind) in list(self.flash.items()):
+            k = (time.time() - since) / (.6 if kind == "warn" else .7)
+            if k >= 1 or i >= len(self.card_items):
+                del self.flash[i]
+                self._paint_cards()
                 continue
-            p = ((t + phase) % 10) / 10
-            x, y = x0 + 18 * p * s * 3, y0 - 70 * p * s * 3
-            r = 1.6
-            self.coords(item, x - r, y - r, x + r, y + r)
-            fade = min(p / 0.2, 1, (1 - p) / 0.2)
-            self.itemconfigure(item, state="normal", fill=theme.mix(INK, a, 0.55 * max(0, fade)))
-        # the banner blinks while hunting (and stops once locked)
-        if self.on:
-            blink = self.locked or int(t * 2) % 2 == 0
-            self.itemconfigure(self.banner, fill="#FF6B6B" if blink else "#7a2a2a")
+            items = self.card_items[i]
+            if kind == "warn":
+                self.itemconfigure(items["ring"], state="normal", outline=theme.mix(RED, theme.BG, k))
+            else:
+                self.itemconfigure(items["box"], fill=theme.mix(theme.mix(theme.BG, RED, .45), "#120507", k))
+        # blinking: the TERMINATE? badge (.5 s) and the banner (1 s) while the sequence plays; steady once locked
+        if self.hunt and not locked:
+            on = int(t * 2) % 2 == 0
+            for items in self.card_items:
+                self.itemconfigure(items["badge_bg"], fill=RED if int(t * 4) % 2 == 0 else "#8a1f1f")
+            for item in self.banner:
+                self.itemconfigure(item, fill="#FF6B6B" if on else "#6b2a2a")
+        elif locked:
+            for item in self.banner:
+                self.itemconfigure(item, fill="#FF6B6B")

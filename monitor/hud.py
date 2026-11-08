@@ -32,7 +32,7 @@ class Section(tk.Frame):
     def __init__(self, parent, title: str, badge: bool = True):
         super().__init__(parent, bg=theme.BG)
         tk.Frame(self, bg=theme.LASER, width=3, height=16).pack(side="left", padx=(0, 8))
-        tk.Label(self, text=title.upper(), font=(theme.FONT, 10, "bold"), fg=theme.TEXT, bg=theme.BG).pack(side="left")
+        tk.Label(self, text=title.upper(), font=(theme.FONT, 9, "bold"), fg=theme.TEXT, bg=theme.BG).pack(side="left")
         self.badge = tk.Label(self, text="0", font=(theme.MONO, 9, "bold"), fg=theme.LASER, bg=theme.SELECT, padx=6)
         if badge:
             self.badge.pack(side="left", padx=8)
@@ -59,7 +59,7 @@ class StatCard(tk.Canvas):
     """A HUD panel: a small label, a big number, a line under it, and a live graph of the last 3 minutes."""
 
     def __init__(self, parent, label: str):
-        super().__init__(parent, height=84, bg=theme.PANEL, highlightthickness=0)
+        super().__init__(parent, height=92, bg=theme.PANEL, highlightthickness=0)
         self.label = label
         self.history: deque[float] = deque(maxlen=HISTORY)
         self.value, self.sub, self.colour, self.share = "-", "", theme.TEXT, 0.0
@@ -117,7 +117,7 @@ class JobCard(tk.Frame):
         body.pack(side="left", fill="both", expand=True, padx=12, pady=8)
         top = tk.Frame(body, bg=theme.PANEL)
         top.pack(fill="x")
-        self.name = tk.Label(top, font=(theme.FONT, 11, "bold"), fg=theme.TEXT, bg=theme.PANEL, anchor="w")
+        self.name = tk.Label(top, font=(theme.FONT, 10, "bold"), fg=theme.TEXT, bg=theme.PANEL, anchor="w")
         self.name.pack(side="left")
         self.source = tk.Label(top, font=(theme.FONT, 8, "bold"), fg=theme.BG, bg=theme.GREEN, padx=6)
         self.source.pack(side="left", padx=10)
@@ -223,7 +223,7 @@ class JobCard(tk.Frame):
 class RunningPanel(tk.Frame):
     """The running jobs as cards (one per job, reused between refreshes), or a calm message when none run."""
 
-    MAX_HEIGHT = 290  # about three cards; more scroll (mouse wheel), so the queue and tabs keep their room
+    MAX_HEIGHT = 250  # about two and a half cards; more scroll (mouse wheel), so the queue and tabs keep their room
 
     def __init__(self, parent, app):
         super().__init__(parent, bg=theme.BG)
@@ -325,7 +325,7 @@ class Briefing(tk.Frame):
         row.pack(fill="x", pady=(2, 0))
         self.chip = tk.Label(row, font=(theme.FONT, 9, "bold"), padx=10, pady=2)
         self.chip.pack(side="left")
-        self.sentence = tk.Label(row, font=(theme.FONT, 11), fg=theme.TEXT, bg=theme.BG, anchor="w", justify="left")
+        self.sentence = tk.Label(row, font=(theme.FONT, 10), fg=theme.TEXT, bg=theme.BG, anchor="w", justify="left")
         self.sentence.pack(side="left", padx=12, fill="x", expand=True)
         self.shown = None
 
@@ -367,7 +367,7 @@ class NextList(tk.Frame):
                      width=3).pack(side="left", padx=(4, 2), pady=4)
             words = tk.Frame(row, bg=theme.PANEL)
             words.pack(side="left", fill="x", expand=True, pady=3)
-            tk.Label(words, text=job.name, font=(theme.FONT, 10, "bold"), fg=theme.TEXT, bg=theme.PANEL,
+            tk.Label(words, text=job.name, font=(theme.FONT, 9, "bold"), fg=theme.TEXT, bg=theme.PANEL,
                      anchor="w").pack(fill="x")
             step = " ".join(str(job.step).split())
             tk.Label(words, text=step[:90] + ("..." if len(step) > 90 else ""), font=(theme.FONT, 8),

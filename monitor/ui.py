@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
 from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
-from .hunter import KhaltronHeader
+from .hunter import KhaltronHeader, card_for
 from .collect import State, collect
 from .config import BOOK, CONFIG
 from .model import DONE, FAILED, RUNNING, STOPPED, WAITING, Job
@@ -297,7 +297,9 @@ class App:
     def brand(self):
         """The header, after the owner's design (khaltron-header.css): the robot watching the six busiest programs
         on its ledge, cyan while monitoring, red when gaming mode hunts (monitor/hunter.py)."""
-        self.header = KhaltronHeader(self.root, self.toggle_gaming, height=260)
+        self.programs = []  # the latest Programs-on-this-PC rows (for the cards gaming mode will pause)
+        self.header = KhaltronHeader(self.root, on_locked=self.freeze_for_game, on_exit=self.leave_game,
+                                     targets=self.gaming_targets)
         self.header.pack(fill="x")
         tk.Frame(self.root, height=1, bg=theme.LINE).pack(fill="x")
 
@@ -369,7 +371,6 @@ class App:
                                         theme.LASER)
         alert = bool(h and h.free_mb < CONFIG["low_memory_mb"]) or any(
             j.state == FAILED and j.finished and now - j.finished < 600 for j in state.finished)
-        self.header.status(len(state.running), len(state.waiting), alert)
         flags = []
         playing = gaming.is_on()
         if not self.gaming_switch.busy:
@@ -392,7 +393,12 @@ class App:
         self.next_list.show(state.waiting)
         self.next_title.count(len(state.waiting))
         frozen = {item["pid"] for item in (read_json(gaming.FLAG, {}) or {}).get("frozen", [])} if playing else set()
-        self.header.show_programs(state.programs, frozen)
+        self.programs = state.programs
+        apps = [a for a in state.programs if a.yours and not a.name.startswith("Windows")]
+        apps.sort(key=lambda a: (-round(a.cpu), -a.memory_mb))
+        self.header.set_programs([card_for(a) for a in apps[:6]])
+        if playing:
+            self.header.mark_frozen(frozen)
         self.briefing.show(*briefing(state, playing))
         self.running_title.count(len(state.running))
         self.waiting_title.count(len(state.waiting))
@@ -428,6 +434,44 @@ class App:
             if not messagebox.askyesno("Are you sure?", actions.question(job, action), parent=self.root):
                 return
         self.run_in_background(lambda: actions.do(job, action))
+
+    def gaming_targets(self):
+        """The cards for gaming mode's sequence: the programs it will really pause (your background jobs and the
+        safe background apps), so what the robot locks onto is the truth."""
+        from .sources import programs as program_source
+        pausable = {"Python (incl. your background jobs)"} | {
+            program_source.FRIENDLY.get(exe, exe.rsplit(".", 1)[0]) for exe in gaming.EXTRA_APPS}
+        cards = [card_for(a) for a in self.programs if a.name in pausable]
+        for card in cards:
+            card.pausable = True
+        return cards
+
+    def freeze_for_game(self, _cards):
+        """The header's gaming sequence locked: now really freeze the jobs (the design: 'onLocked')."""
+        if gaming.is_on() or self.header.busy:
+            return
+        self._switch_gaming(gaming.turn_on)
+
+    def leave_game(self):
+        """EXIT GAMING MODE clicked: let everything carry on."""
+        if gaming.is_on():
+            self._switch_gaming(gaming.turn_off)
+
+    def _switch_gaming(self, switch):
+        self.header.set_state(gaming.is_on(), busy=True)
+
+        def do():
+            try:
+                message = switch()
+            finally:
+                self.results.put(("gaming_done", None))
+                self.wake.set()
+            lines = message.splitlines()
+            frozen = [line for line in lines if line.startswith("- Frozen:")]
+            body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+            self.results.put(("notify", (lines[0], body)))
+            return lines[0] + "  " + lines[-1]
+        self.run_in_background(do)
 
     def toggle_gaming(self):
         """No "are you sure?": it is meant to be quick, and switching it back undoes everything it did.

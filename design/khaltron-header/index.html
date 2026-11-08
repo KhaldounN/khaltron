@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Khaltron 9000 — Header demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="khaltron-header.css">
+<style>
+  body { margin: 0; background: #05070A; color: #DCE7F0; font-family: 'JetBrains Mono', monospace; }
+  main { padding: 24px; font-size: 13px; color: #8FA2B4; }
+</style>
+</head>
+<body>
+<header id="header"></header>
+<main>Demo of the Khaltron 9000 header. Click "GAMING MODE" (top right) to run the warn → pause → freeze sequence.</main>
+<script src="khaltron-header.js"></script>
+<script>
+  window.header = KhaltronHeader.mount(document.getElementById('header'), {
+    image: 'assets/khaltron-raccoon.jpg',
+    onModeChange: function (m) { console.log('mode:', m); },
+    onLocked: function (procs) { console.log('locked — pause these for real:', procs); }
+  });
+</script>
+</body>
+</html>

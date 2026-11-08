@@ -1,7 +1,9 @@
-"""Khaltron 9000's look: a cybernetic sentinel drone (Terminator style) that watches your jobs. Near-black gunmetal, one laser-red eye, red as the
-accent; green stays for running jobs and amber for warnings, so the lists stay easy to read. Also its logo (the
-drone's eye) and a dark Windows title bar. Everything about colours and fonts lives here; ui.py, hud.py and hunter.py
-only use the names below.
+"""Khaltron 9000's look, after the owner's design (design/khaltron-header/README.md, "Design tokens"): a near-black
+background, cyan as the single accent colour, red only for gaming mode and alerts, monospace caps labels with wide
+letter-spacing, thin glowing borders; Orbitron for the wordmark and buttons, JetBrains Mono for everything else
+(both bundled in assets/fonts, OFL licence, loaded privately: nothing is installed in Windows). Also the logo (the
+raccoon's face from the header artwork) and a dark Windows title bar. ui.py, hud.py and hunter.py only use the
+names below.
 
 tkinter's default Windows look ("vista") is drawn by Windows and ignores colours, so the theme is built on
 "clam", the built-in look that lets every colour be set."""
@@ -9,37 +11,58 @@ tkinter's default Windows look ("vista") is drawn by Windows and ignores colours
 import ctypes
 import sys
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 
 from PIL import Image, ImageDraw, ImageFilter
 
 NAME = "Khaltron 9000"
-WORD, NUMBER = "KHALTRON", "9000"  # the header draws the model number in laser red
-TAGLINE = "cybernetic sentinel  \u00b7  model K-9000  \u00b7  all jobs under surveillance"
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
-# the palette
-BG = "#07080b"        # window: almost black
-PANEL = "#0e1015"     # lists, inputs, the header
-RAISED = "#181b22"    # buttons, headings, tabs (gunmetal)
-METAL = "#2b303b"     # the drone's armour edges
-LINE = "#262a33"      # borders, separators
-TEXT = "#e8e9ee"
-MUTED = "#8d909c"
-DIM = "#545866"       # disabled text
-LASER = "#ff2a3d"     # the accent: the eye and its laser
-LASER_DARK = "#7a0d18"
-LASER_HOT = "#ffb3b8"  # the white-hot centre of the eye
-GREEN = "#4ade80"     # running
-AMBER = "#fbbf24"     # warnings
-RED = "#ff5b6b"       # failed
-SELECT = "#3a0f16"    # a selected row: dark red
+# the palette (the design's tokens)
+BG = "#05070A"        # page background
+PANEL = "#0A0E14"     # lists, inputs, cards
+RAISED = "#121821"    # buttons, headings, tabs
+METAL = "#2C2E32"     # the ledge's steel
+LINE = "#1B2631"      # borders, separators
+TEXT = "#F2F7FB"      # text primary
+MUTED = "#93A5B6"     # text secondary
+DIM = "#4F5D6B"       # disabled text
+LASER = "#35E0FF"     # THE accent (cyan; the name stays from the red version)
+LASER_DARK = "#0E5566"
+LASER_HOT = "#BDF6FF"
+HUNT = "#FF3B3B"      # gaming mode and alerts only
+GREEN = "#7FE9FF"     # running / fine: the cyan family ("monitored")
+AMBER = "#FBBF24"     # warnings
+RED = "#FF7A7A"       # failed ("warned")
+SELECT = "#0D2C36"    # a selected row: dark cyan
 
-FONT = "Segoe UI"
-MONO = "Cascadia Mono" if sys.platform == "win32" else "Courier"
+FONT = "JetBrains Mono"          # everything (the design: monospace UI)
+MONO = "JetBrains Mono"
+DISPLAY = "Orbitron ExtraBold"   # the wordmark (Orbitron 800)
+DISPLAY_SEMI = "Orbitron SemiBold"  # buttons (Orbitron 600)
+_loaded = False
+
+
+def load_fonts() -> None:
+    """Make the bundled fonts usable by this program only (FR_PRIVATE): no installing, gone when it ends.
+    Falls back to Windows' own fonts if they can't be loaded."""
+    global _loaded, FONT, MONO, DISPLAY, DISPLAY_SEMI
+    if _loaded:
+        return
+    _loaded = True
+    ok = 0
+    if sys.platform == "win32":
+        for font in (ASSETS / "fonts").glob("*.ttf"):
+            ok += bool(ctypes.windll.gdi32.AddFontResourceExW(str(font), 0x10, 0))  # FR_PRIVATE
+    if not ok:
+        FONT = MONO = "Consolas"
+        DISPLAY = DISPLAY_SEMI = "Bahnschrift"
 
 
 def apply(root: tk.Tk) -> ttk.Style:
     """Dark colours for every ttk widget the window uses, and for the plain tk ones (menus, text)."""
+    load_fonts()
     root.configure(bg=BG)
     style = ttk.Style(root)
     style.theme_use("clam")
@@ -131,55 +154,26 @@ def mix(a: str, b: str, t: float) -> str:
 
 
 def logo(size: int = 64) -> Image.Image:
-    """Khaltron 9000's mark: the sentinel drone seen from the front. A round armoured body with side fins, and one
-    laser-red eye narrowed by two slanted armour plates, so it looks like it is glaring at you. Drawn 4x and
-    shrunk, so its edges are smooth at any size (tray, window, desktop icon)."""
+    """Khaltron 9000's mark: the raccoon's face, cut from the header artwork (glowing cyan eyes), in a rounded
+    square with a thin cyan border. Falls back to a plain cyan ring if the artwork is missing."""
+    art = ASSETS / "khaltron-raccoon.jpg"
     big = size * 4
-    s = big / 64
-    c = 32 * s
-    image = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-
-    def solid(colour: str) -> tuple:
-        return _rgb(colour) + (255,)
-
-    draw = ImageDraw.Draw(image)
-    # side fins (the drone's arms), behind the body, each with a small red light
-    for side in (-1, 1):
-        x0 = c + side * 20 * s
-        x1 = c + side * 31 * s
-        draw.polygon([(x0, c - 7 * s), (x1, c - 3 * s), (x1, c + 3 * s), (x0, c + 7 * s)], fill=solid(RAISED),
-                     outline=solid(METAL), width=int(1.2 * s))
-        lx = c + side * 27.5 * s
-        draw.ellipse((lx - 1.4 * s, c - 1.4 * s, lx + 1.4 * s, c + 1.4 * s), fill=solid(LASER))
-    # the body: armour rim, dark visor
-    draw.ellipse((c - 22 * s, c - 22 * s, c + 22 * s, c + 22 * s), fill=solid(RAISED), outline=solid(METAL),
-                 width=int(2 * s))
-
-    # the visor is drawn on its own layer and cut to a circle at the end, so the plates never stick out
-    visor = Image.new("RGBA", (big, big), solid("#050608"))
-    # the glow of the eye, blurred so it bleeds over the visor
-    glow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse((c - 13 * s, c - 9 * s, c + 13 * s, c + 9 * s), fill=_rgb(LASER) + (210,))
-    visor.alpha_composite(glow.filter(ImageFilter.GaussianBlur(4 * s)))
-    draw = ImageDraw.Draw(visor)
-    # the eye: red iris, white-hot centre
-    draw.ellipse((c - 10 * s, c - 10 * s, c + 10 * s, c + 10 * s), fill=solid(LASER))
-    draw.ellipse((c - 4.5 * s, c - 4.5 * s, c + 4.5 * s, c + 4.5 * s), fill=solid(LASER_HOT))
-    draw.ellipse((c - 2 * s, c - 2 * s, c + 2 * s, c + 2 * s), fill=(255, 255, 255, 255))
-    # two armour plates slanting down to the middle: an angry, narrowed eye
-    lid = solid("#050608")
-    draw.polygon([(c - 17 * s, c - 17 * s), (c + 17 * s, c - 17 * s), (c + 17 * s, c - 9 * s), (c, c - 4 * s),
-                  (c - 17 * s, c - 9 * s)], fill=lid)
-    draw.polygon([(c - 17 * s, c + 17 * s), (c + 17 * s, c + 17 * s), (c + 17 * s, c + 7 * s), (c, c + 5 * s),
-                  (c - 17 * s, c + 7 * s)], fill=lid)
-    # the plates' edges catch a little light
-    draw.line([(c - 17 * s, c - 9 * s), (c, c - 4 * s), (c + 17 * s, c - 9 * s)], fill=solid(METAL), width=int(1.2 * s))
+    canvas = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     mask = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(mask).ellipse((c - 16 * s, c - 16 * s, c + 16 * s, c + 16 * s), fill=255)
-    image.paste(visor, (0, 0), mask)
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((c - 16 * s, c - 16 * s, c + 16 * s, c + 16 * s), outline=solid(METAL), width=int(1.5 * s))
-    return image.resize((size, size), Image.LANCZOS)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, big - 1, big - 1), radius=big // 5, fill=255)
+    if art.exists():
+        photo = Image.open(art).convert("RGB")
+        # the face: around the eyes (the design's (799, 114) on its 960x320 crop of the 3:1 artwork)
+        cx, cy = (799 - 320) / 960 * photo.width, 114 / 320 * photo.height + photo.height * 0.04
+        half = photo.height * 0.30
+        face = photo.crop((int(cx - half), int(cy - half), int(cx + half), int(cy + half))).resize((big, big))
+        canvas.paste(face, (0, 0), mask)
+    else:
+        ImageDraw.Draw(canvas).ellipse((big * .2, big * .2, big * .8, big * .8), outline=_rgb(LASER) + (255,),
+                                       width=big // 12)
+    ImageDraw.Draw(canvas).rounded_rectangle((1, 1, big - 2, big - 2), radius=big // 5,
+                                            outline=_rgb(LASER) + (255,), width=max(2, big // 40))
+    return canvas.resize((size, size), Image.LANCZOS)
 
 
 def save_icon(path) -> None:
