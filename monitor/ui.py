@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
-from .hud import RunningPanel, Section, StatCard
+from .hud import GamingSwitch, RunningPanel, Section, StatCard
 from .sentinel import SentinelHeader
 from .collect import State, collect
 from .config import BOOK, CONFIG
@@ -188,6 +188,8 @@ class App:
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
+        self.gaming_switch = GamingSwitch(top, self.toggle_gaming)
+        self.gaming_switch.pack(side="right", padx=(0, 10))
 
         self.flags = ttk.Label(top, text="", style="Flag.TLabel")
         self.flags.pack(side="left", fill="x", expand=True)
@@ -283,6 +285,8 @@ class App:
                 elif kind == "notify":
                     if self.tray:
                         self.tray.notify(*value)
+                elif kind == "gaming_done":
+                    self.gaming_switch.set_state(gaming.is_on(), busy=False)
                 elif kind == "gaming":
                     self.toggle_gaming()
                 elif kind == "show":
@@ -320,6 +324,8 @@ class App:
         self.header.status(len(state.running), len(state.waiting), alert)
         flags = []
         playing = gaming.is_on()
+        if not self.gaming_switch.busy:
+            self.gaming_switch.set_state(playing)
         if playing:
             flags.append("GAMING MODE is on: background jobs are frozen (Start / control > Gaming mode off).")
         if playing != self.gaming_was and self.gaming_was is not None and self.tray:
@@ -371,11 +377,23 @@ class App:
         self.run_in_background(lambda: actions.do(job, action))
 
     def toggle_gaming(self):
-        """No "are you sure?": it is meant to be quick, and switching it back undoes everything it did."""
+        """No "are you sure?": it is meant to be quick, and switching it back undoes everything it did.
+        The switch shows SWITCHING... meanwhile; afterwards a pop-up says what was frozen and what it freed."""
+        if self.gaming_switch.busy:
+            return
+        self.gaming_switch.set_state(gaming.is_on(), busy=True)
+
         def do():
-            message = gaming.toggle()
-            self.wake.set()
-            return message.splitlines()[0]
+            try:
+                message = gaming.toggle()
+            finally:
+                self.results.put(("gaming_done", None))
+                self.wake.set()
+            lines = message.splitlines()
+            frozen = [line for line in lines if line.startswith("- Frozen:")]
+            body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+            self.results.put(("notify", (lines[0], body)))
+            return lines[0] + "  " + lines[-1]
         self.run_in_background(do)
 
     def global_action(self, text: str, do):

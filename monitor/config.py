@@ -14,6 +14,10 @@ DEFAULTS = {
     "heavy_process_mb": 300,        # a python process using more memory than this is listed
     "heavy_process_cpu": 20,        # ... or more CPU (percent of one core) than this
     "scheduled_tasks": ["Book Analyzer website", "Book Visualizer library (3 am)", "Khaltron 9000"],
+    # gaming mode also freezes these background apps (process name -> what the window calls it), and any other
+    # Python script of yours holding more RAM than gaming_python_mb; only things that are safe to freeze
+    "gaming_also_freeze": {"OneDrive.exe": "OneDrive sync"},
+    "gaming_python_mb": 200,
     "port": 59126,                  # a second launch tells the first window to show itself through this port
 }
 

@@ -252,3 +252,69 @@ class RunningPanel(tk.Frame):
             self.after(50 if self.winfo_viewable() else 500, self.tick)
         except tk.TclError:
             pass
+
+
+# --- the gaming mode switch ---------------------------------------------------------------------------------------
+class GamingSwitch(tk.Canvas):
+    """A big sliding switch: 'GAMING MODE' with OFF/ON. Off: grey. On: laser red, the knob glows and pulses.
+    While switching: 'SWITCHING...'. A click calls `on_click` (the window does the switching in the background)."""
+
+    W, H = 196, 34
+
+    def __init__(self, parent, on_click):
+        super().__init__(parent, width=self.W, height=self.H, bg=theme.BG, highlightthickness=0, cursor="hand2")
+        self.on, self.busy, self.hover = False, False, False
+        self.started = time.time()
+        self.bind("<Button-1>", lambda e: None if self.busy else on_click())
+        self.bind("<Enter>", lambda e: self._hover(True))
+        self.bind("<Leave>", lambda e: self._hover(False))
+        self.draw()
+        self.after(60, self.tick)
+
+    def _hover(self, inside: bool):
+        self.hover = inside
+        self.draw()
+
+    def set_state(self, on: bool, busy: bool | None = None):
+        changed = on != self.on or (busy is not None and busy != self.busy)
+        self.on = on
+        if busy is not None:
+            self.busy = busy
+        if changed:
+            self.draw()
+
+    def draw(self, glow: float = 0.0):
+        self.delete("all")
+        w, h = self.W, self.H
+        live = self.on and not self.busy
+        edge = theme.LASER if live else (theme.LASER_DARK if self.hover or self.busy else theme.LINE)
+        fill = theme.mix(theme.PANEL, theme.LASER_DARK, 0.5 + 0.3 * glow) if live else theme.PANEL
+        self.create_rectangle(1, 1, w - 2, h - 2, outline=edge, width=2, fill=fill)
+        for x, dx in ((1, 1), (w - 2, -1)):  # HUD notches on the short sides
+            self.create_line(x, h / 2 - 6, x + dx * 5, h / 2, x, h / 2 + 6, fill=edge, width=2)
+        label = "SWITCHING..." if self.busy else "GAMING MODE"
+        self.create_text(14, h / 2, text=label, anchor="w", font=(theme.FONT, 9, "bold"),
+                         fill=theme.TEXT if live or self.hover else theme.MUTED)
+        # the pill switch on the right
+        x0, x1, y0, y1 = w - 74, w - 12, 8, h - 8
+        r = (y1 - y0) / 2
+        track = theme.LASER if live else theme.RAISED
+        self.create_oval(x0, y0, x0 + 2 * r, y1, fill=track, outline="")
+        self.create_oval(x1 - 2 * r, y0, x1, y1, fill=track, outline="")
+        self.create_rectangle(x0 + r, y0, x1 - r, y1, fill=track, outline="")
+        knob = x1 - r if live else x0 + r
+        if live:
+            halo = 3 + 3 * glow
+            self.create_oval(knob - r - halo, y0 - halo, knob + r + halo, y1 + halo, outline=theme.LASER_HOT, width=1)
+        self.create_oval(knob - r + 2, y0 + 2, knob + r - 2, y1 - 2, fill=theme.TEXT if live else theme.MUTED, outline="")
+        self.create_text(x0 + r + 18 if live else x1 - r - 16, h / 2, text="ON" if live else "OFF",
+                         font=(theme.FONT, 7, "bold"), fill="#ffffff" if live else theme.DIM)
+
+    def tick(self):
+        """While on (or switching), pulse; otherwise idle."""
+        try:
+            if (self.on or self.busy) and self.winfo_viewable():
+                self.draw(0.5 + 0.5 * math.sin((time.time() - self.started) * 4))
+            self.after(80 if self.on or self.busy else 400, self.tick)
+        except tk.TclError:
+            pass

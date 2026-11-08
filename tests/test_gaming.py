@@ -149,3 +149,24 @@ def test_switching_twice_is_harmless(game):
     assert "already ON" in gaming.turn_on()
     gaming.turn_off()
     assert "already OFF" in gaming.turn_off()
+
+
+def test_other_heavy_python_scripts_are_frozen_too_but_small_ones_are_not(game, monkeypatch):
+    """Gaming mode frees as much as it safely can: any other Python script of yours over gaming_python_mb."""
+    script = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "my_experiment"])
+    try:
+        deadline = time.time() + 15
+        while time.time() < deadline and "my_experiment" not in " ".join(psutil.Process(script.pid).cmdline()):
+            time.sleep(0.1)
+        monkeypatch.setitem(gaming.CONFIG, "gaming_python_mb", 100_000)  # far more than a sleeping python holds
+        gaming.turn_on()
+        assert state_of(script) != psutil.STATUS_STOPPED
+        gaming.turn_off()
+        monkeypatch.setitem(gaming.CONFIG, "gaming_python_mb", 1)  # every python counts as heavy
+        message = gaming.turn_on()
+        assert state_of(script) == psutil.STATUS_STOPPED
+        assert "Python:" in message
+        gaming.turn_off()
+        assert state_of(script) != psutil.STATUS_STOPPED
+    finally:
+        script.kill()

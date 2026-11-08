@@ -26,7 +26,7 @@ from pathlib import Path
 import psutil
 
 from . import planned
-from .config import BOOK, STATE
+from .config import BOOK, CONFIG, STATE
 from .sources.processes import KNOWN
 from .util import NO_WINDOW, read_json, write_json
 
@@ -77,15 +77,43 @@ def _cmdline(process: psutil.Process) -> str:
         return ""
 
 
+def _extras(process: psutil.Process, name: str, cmdline: str) -> str | None:
+    """Besides the known jobs, what else is safe to freeze for a game (None = leave it alone):
+    - background apps listed in config "gaming_also_freeze" (by default OneDrive: its sync just pauses);
+    - any other Python script of yours holding more than config "gaming_python_mb" of RAM (a heavy script).
+    Never: protected processes (website, voice, Khaltron), Claude, browsers, the game itself; nothing that has a
+    window you use (a frozen window looks like a crash), which is why the list is short and by name."""
+    if name in EXTRA_APPS:
+        return f"{EXTRA_APPS[name]} (paused)"
+    if name.startswith("python") and not any(n in cmdline for n in NEVER):
+        try:
+            if process.memory_info().rss / 2 ** 20 >= CONFIG.get("gaming_python_mb", 200):
+                script = next((part for part in cmdline.split() if part.endswith(".py")), "a Python script")
+                return f"Python: {os.path.basename(script)}"
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return None
+
+
+EXTRA_APPS = {name.lower(): label for name, label in
+              CONFIG.get("gaming_also_freeze", {"OneDrive.exe": "OneDrive sync"}).items()}
+
+
 def _job_processes() -> list[psutil.Process]:
-    """Every background-job process: known job scripts, plus whatever planned jobs are running (and children)."""
+    """Every process gaming mode freezes: known job scripts, whatever planned jobs are running (and their
+    children), and the safe extras (_extras)."""
     found: dict[int, psutil.Process] = {}
     for process in psutil.process_iter(["name"]):
         name = (process.info.get("name") or "").lower()
+        if name in EXTRA_APPS:
+            found[process.pid] = process
+            continue
         if not name.startswith(("python", "powershell", "pwsh")):
             continue
         cmdline = _cmdline(process)
-        if any(needle in cmdline for needle in JOB_NEEDLES) and not any(n in cmdline for n in NEVER):
+        if any(n in cmdline for n in NEVER):
+            continue
+        if any(needle in cmdline for needle in JOB_NEEDLES) or _extras(process, name, cmdline):
             found[process.pid] = process
     for entry in planned.load():
         if entry.get("state") in (planned.RUNNING, planned.STOPPING) and entry.get("pid"):
@@ -120,12 +148,15 @@ def _freeze_new(state: dict) -> list[str]:
             if (process.pid, created) in known:
                 continue
             memory = process.memory_info().rss / 2 ** 20
+            # named BEFORE freezing: _trim empties its RAM, and the extras are recognised by their RAM
+            cmdline = _cmdline(process)
+            name = (getattr(process, "info", None) or {}).get("name") or process.name()
+            label = next((lbl for needle, lbl, _ in KNOWN if needle in cmdline), None) or \
+                _extras(process, name.lower(), cmdline) or "Planned job"
             process.suspend()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
         _trim(process.pid)
-        cmdline = _cmdline(process)
-        label = next((lbl for needle, lbl, _ in KNOWN if needle in cmdline), "Planned job")
         state["frozen"].append({"pid": process.pid, "created": created, "label": label})
         out.append(f"{label} (process {process.pid}, {memory:.0f} MB)")
     return out
