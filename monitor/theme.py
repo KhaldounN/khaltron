@@ -1,6 +1,6 @@
 """Khaltron 9000's look: a cybernetic sentinel drone (Terminator style) that watches your jobs. Near-black gunmetal, one laser-red eye, red as the
 accent; green stays for running jobs and amber for warnings, so the lists stay easy to read. Also its logo (the
-drone's eye) and a dark Windows title bar. Everything about colours and fonts lives here; ui.py and sentinel.py
+drone's eye) and a dark Windows title bar. Everything about colours and fonts lives here; ui.py, hud.py and hunter.py
 only use the names below.
 
 tkinter's default Windows look ("vista") is drawn by Windows and ignores colours, so the theme is built on

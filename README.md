@@ -36,7 +36,10 @@ can still see and control.
 - **Protected processes**: things that must never be stopped (by default: a voice server, a website, Khaltron itself)
   have no Stop button, and are checked again right before any stop.
 - **Notifications**: a Windows pop-up when a job starts, finishes or fails, and when free memory runs low.
-- **Gaming mode**: one click on the GAMING MODE switch (or Ctrl+Alt+G) freezes every background job, any other
+- **A header that watches**: a robot holds your six busiest programs on its ledge and scans them
+  one by one (cyan). Switch gaming mode on and it hunts (red): it zooms in, locks onto every
+  program, then freezes, staring down. Put your own picture in `assets\header.jpg` (1600 x 533).
+- **Gaming mode**: one click on the header's GAMING MODE button (or Ctrl+Alt+G) freezes every background job, any other
   heavy Python script of yours and safe background apps (OneDrive by default) so a game gets the CPU and memory,
   and puts everything back when you switch it off. A pop-up says what was frozen and how much memory it freed.
 - **Light on your PC**: one Windows call per refresh reads every process (~55 ms), and the animations slow down
@@ -126,8 +129,8 @@ Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\p
 |---|---|
 | `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
 | `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
-| `monitor\sentinel.py` | the animated header: the drone's scanning red eye, its laser, the HUD readout |
-| `monitor\hud.py` | the stat cards with live graphs, the job cards, the gaming switch, the overview parts |
+| `monitor\hunter.py` | the header (after `khaltron-header.css`): the robot watching your six busiest programs on its ledge; cyan in monitor mode, red when gaming mode hunts |
+| `monitor\hud.py` | the stat cards with live graphs, the job cards, the overview parts |
 | `monitor\theme.py` | every colour and font, the logo, the dark title bar |
 | `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |
 | `monitor\sources\` | the readers (jobs, processes, every program on the PC, PC health, scheduled tasks) |

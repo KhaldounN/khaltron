@@ -1,0 +1,124 @@
+/* Khaltron 9000 header — styles. Everything is scoped under .khaltron.
+   Native canvas: 1600 x 533 px. The JS scales it to fit its container. */
+
+.khaltron-fit { position: relative; width: 100%; overflow: hidden; }
+.khaltron {
+  --c: #35E0FF;               /* active accent: cyan in monitor mode */
+  position: relative; width: 1600px; height: 533px; overflow: hidden;
+  background: #05070A; color: #DCE7F0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  transform-origin: 0 0;
+}
+.khaltron.mode-hunt { --c: #FF3B3B; } /* red in gaming mode */
+.khaltron * { box-sizing: border-box; }
+.khaltron svg * { transition: fill .5s, stroke .5s, opacity .5s, stop-color .5s; }
+.khaltron .tc { fill: var(--c); }
+.khaltron .sc { stop-color: var(--c); }
+.khaltron .layer { position: absolute; left: 0; top: 0; width: 1600px; height: 533px; }
+
+/* Camera push-in + shake */
+.khaltron .cam { transform-origin: 799px 190px; transition: transform .9s cubic-bezier(.2,.8,.2,1); }
+.khaltron.mode-hunt .cam { transform: scale(1.06); }
+.khaltron.mode-hunt .shake { animation: kh-shake .18s linear infinite; }
+.khaltron .photo { display: block; width: 1600px; height: 533px; object-fit: cover; }
+.khaltron .grade { background: #FF2A2A; mix-blend-mode: color; opacity: 0; transition: opacity .8s; }
+.khaltron.mode-hunt .grade { opacity: .38; }
+.khaltron .darken { background: #000; opacity: 0; transition: opacity .8s; }
+.khaltron.mode-hunt .darken { opacity: .3; }
+
+/* Eyes (overlaid on the photo's eyes) */
+.khaltron .eyeglow { opacity: .45; mix-blend-mode: screen; animation: kh-pulse 2.6s ease-in-out infinite; }
+.khaltron.mode-hunt .eyeglow { opacity: .9; animation-duration: .5s; }
+.khaltron .redeye { opacity: 0; transition: opacity .35s; }
+.khaltron.mode-hunt .redeye { opacity: 1; }
+.khaltron .pupil { transition: transform .55s cubic-bezier(.3,.9,.3,1); }
+.khaltron .lid { opacity: 0; transform: translateY(-14px); transition: transform .45s cubic-bezier(.5,0,.2,1), opacity .3s; }
+.khaltron.mode-hunt .lid { opacity: 1; transform: translateY(0); }
+
+/* Scan beams */
+.khaltron .beam { transform-box: view-box; transition: transform .55s cubic-bezier(.3,.9,.3,1); }
+.khaltron .beam.bl { transform-origin: 741px 192px; }
+.khaltron .beam.br { transform-origin: 856px 187px; }
+.khaltron .beam-cone { opacity: .45; }
+.khaltron.mode-hunt .beam-cone { opacity: .9; animation: kh-flicker .12s steps(2) infinite; }
+.khaltron .laser { opacity: 0; }
+.khaltron.mode-hunt .laser { opacity: 1; }
+
+/* Gaze targets: look-0..5 = card slots, look-c = straight down at all */
+.khaltron.look-0 .pupil { transform: translate(-3px,2px); }   .khaltron.look-0 .beam { transform: rotate(67deg); }
+.khaltron.look-1 .pupil { transform: translate(-2.5px,2px); } .khaltron.look-1 .beam { transform: rotate(60.9deg); }
+.khaltron.look-2 .pupil { transform: translate(-1px,2.5px); } .khaltron.look-2 .beam { transform: rotate(13.6deg); }
+.khaltron.look-3 .pupil { transform: translate(1px,2.5px); }  .khaltron.look-3 .beam { transform: rotate(-17.6deg); }
+.khaltron.look-4 .pupil { transform: translate(2.5px,2px); }  .khaltron.look-4 .beam { transform: rotate(-61.5deg); }
+.khaltron.look-5 .pupil { transform: translate(3px,2px); }    .khaltron.look-5 .beam { transform: rotate(-67.4deg); }
+.khaltron.look-c .pupil { transform: translate(0,3px); } .khaltron.look-c .beam { transform: scaleX(60); } .khaltron.look-c .laser { opacity: 0; }
+
+/* App cards — 6 fixed slots on the ledge, between/around the robot's hands */
+.khaltron .card { position: absolute; top: 452px; width: 150px; height: 70px; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid rgba(53,224,255,.35); background: rgba(6,10,16,.78); backdrop-filter: blur(4px);
+  display: flex; flex-direction: column; gap: 6px; transition: border-color .4s, background-color .4s, transform .4s, box-shadow .4s; }
+.khaltron .slot-0 { left: 24px; } .khaltron .slot-1 { left: 190px; } .khaltron .slot-2 { left: 652px; }
+.khaltron .slot-3 { left: 818px; } .khaltron .slot-4 { left: 1270px; } .khaltron .slot-5 { left: 1436px; }
+.khaltron.mode-hunt .card { border-color: rgba(255,59,59,.5); background: rgba(26,6,8,.82); }
+.khaltron .card.targeted { border-color: rgba(53,224,255,.85); box-shadow: 0 0 22px rgba(53,224,255,.25); }
+.khaltron.mode-hunt .card.targeted { border-color: #FF3B3B; transform: translateY(-6px); box-shadow: 0 0 0 2px rgba(255,59,59,.35), 0 0 30px rgba(255,59,59,.5); }
+.khaltron .card::before, .khaltron .card::after { content: ""; position: absolute; width: 12px; height: 12px; opacity: 0; transition: opacity .3s; border-color: #FF3B3B; border-style: solid; }
+.khaltron .card::before { top: -6px; left: -6px; border-width: 2px 0 0 2px; }
+.khaltron .card::after { bottom: -6px; right: -6px; border-width: 0 2px 2px 0; }
+.khaltron.mode-hunt .card.targeted::before, .khaltron.mode-hunt .card.targeted::after { opacity: 1; }
+.khaltron .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.khaltron .pn { font-size: 14px; font-weight: 600; color: #F2F7FB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.khaltron .tag { font-size: 10px; color: #93A5B6; letter-spacing: .1em; }
+.khaltron .bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.khaltron .fill { height: 100%; background: #35E0FF; transition: background-color .4s, width .6s; }
+.khaltron.mode-hunt .fill { background: #FF3B3B; }
+.khaltron .st { display: none; align-items: center; gap: 7px; font-size: 10px; letter-spacing: .14em; }
+.khaltron .s-monitored .st-monitored, .khaltron .s-scanning .st-scanning,
+.khaltron .s-warned .st-warned, .khaltron .s-paused .st-paused { display: flex; }
+.khaltron .st-monitored { color: #7FE9FF; } .khaltron .st-scanning { color: #C2AEAE; }
+.khaltron .st-warned { color: #FF7A7A; } .khaltron .st-paused { color: #FFB3B3; }
+.khaltron .card.s-warned { animation: kh-warnflash .6s ease-out; }
+.khaltron .card.s-paused { background: rgba(18,5,7,.9); animation: kh-pauseflash .7s ease-out; }
+.khaltron .s-paused .fill { background: #5C2626 !important; }
+.khaltron .s-paused .pn { color: #A89494; }
+.khaltron .lock { display: none; position: absolute; top: -11px; right: 10px; align-items: center; padding: 3px 9px; border-radius: 999px;
+  background: #FF3B3B; color: #1A0404; font-size: 10px; font-weight: 600; letter-spacing: .16em; }
+.khaltron.mode-hunt .targeted .lock { display: flex; animation: kh-blink .5s steps(2) infinite; }
+
+/* Header UI */
+.khaltron .brand { position: absolute; left: 32px; top: 26px; z-index: 4; display: flex; flex-direction: column; gap: 10px; }
+.khaltron .wordmark { font-family: Orbitron, sans-serif; font-weight: 800; font-size: 28px; letter-spacing: .08em; color: #F2F7FB; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+.khaltron .mode-line { display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: .18em; color: #B4C3D1; text-shadow: 0 1px 6px rgba(0,0,0,.9); }
+.khaltron .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.khaltron .banner { display: none; align-items: center; gap: 10px; max-width: 360px; font-size: 11px; font-weight: 600; letter-spacing: .18em; color: #FF6B6B; text-shadow: 0 1px 6px rgba(0,0,0,.9); animation: kh-blink 1s steps(2) infinite; }
+.khaltron.mode-hunt .banner { display: flex; }
+.khaltron .toggle { position: absolute; right: 32px; top: 26px; z-index: 4; min-height: 48px; padding: 0 22px; border-radius: 999px;
+  border: 1px solid #35E0FF; background: rgba(6,12,18,.6); color: #CFF7FF; font: 600 14px Orbitron, sans-serif; letter-spacing: .12em;
+  display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background-color .3s, border-color .3s, color .3s; }
+.khaltron .toggle:hover { background: rgba(53,224,255,.16); }
+.khaltron.mode-hunt .toggle { border-color: #FF3B3B; color: #FFD9D9; background: rgba(255,59,59,.18); }
+.khaltron.mode-hunt .toggle:hover { background: rgba(255,59,59,.3); }
+.khaltron .toggle:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* Atmosphere */
+.khaltron .vignette { z-index: 5; pointer-events: none; box-shadow: inset 0 0 130px rgba(255,30,30,.45); opacity: 0; transition: opacity .6s; }
+.khaltron.mode-hunt .vignette { opacity: 1; animation: kh-pulse 1.1s ease-in-out infinite; }
+.khaltron .grain { z-index: 6; pointer-events: none; opacity: .12; mix-blend-mode: overlay; }
+.khaltron .mote { fill: var(--c); opacity: 0; animation: kh-drift 10s linear infinite; }
+
+/* Final frozen state: everything stops, stays red, staring down */
+.khaltron.phase-locked .shake, .khaltron.phase-locked .eyeglow, .khaltron.phase-locked .vignette,
+.khaltron.phase-locked .banner, .khaltron.phase-locked .beam-cone { animation: none !important; }
+.khaltron.phase-locked .mote { animation-play-state: paused; }
+.khaltron.phase-locked .beam-cone { opacity: .6; }
+
+@keyframes kh-warnflash { 0% { box-shadow: 0 0 0 2px #FF3B3B, 0 0 40px rgba(255,59,59,.85); } 100% { box-shadow: 0 0 0 0 rgba(255,59,59,0); } }
+@keyframes kh-pauseflash { 0% { background-color: rgba(255,59,59,.45); } 100% { background-color: rgba(18,5,7,.9); } }
+@keyframes kh-drift { 0% { transform: translate(0,0); opacity: 0; } 20% { opacity: .55; } 80% { opacity: .45; } 100% { transform: translate(18px,-70px); opacity: 0; } }
+@keyframes kh-pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes kh-blink { 0% { opacity: 1; } 100% { opacity: .25; } }
+@keyframes kh-flicker { 0% { opacity: 1; } 100% { opacity: .82; } }
+@keyframes kh-shake { 0% { transform: translate(0,0); } 25% { transform: translate(1.5px,-1px); } 50% { transform: translate(-1.5px,1px); } 75% { transform: translate(1px,1.5px); } 100% { transform: translate(0,0); } }
+@media (prefers-reduced-motion: reduce) {
+  .khaltron .shake, .khaltron .eyeglow, .khaltron .vignette, .khaltron .banner, .khaltron .beam-cone, .khaltron .mote { animation: none !important; }
+}

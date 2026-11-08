@@ -9,12 +9,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
-from .hud import Briefing, GamingSwitch, NextList, PowerBars, RunningPanel, Section, StatCard, ViewSwitch
-from .sentinel import SentinelHeader
+from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
+from .hunter import KhaltronHeader
 from .collect import State, collect
 from .config import BOOK, CONFIG
 from .model import DONE, FAILED, RUNNING, STOPPED, WAITING, Job
-from .util import duration, when
+from .util import duration, read_json, when
 
 GREEN, AMBER, RED, GREY = theme.GREEN, theme.AMBER, theme.RED, theme.MUTED
 SEGMENTS = 20  # the RAM and CPU gauges are drawn as rows of segments
@@ -166,7 +166,8 @@ class App:
         self.hidden_once = False
         self.gaming_was = None  # gaming mode at the last refresh (a change pops up a notification)
         root.title(theme.NAME)
-        root.geometry("1160x900")
+        # tall enough for the header; never taller than the screen (a laptop's is ~1080 px with the taskbar)
+        root.geometry(f"1180x{min(1010, root.winfo_screenheight() - 70)}+40+10")
         root.minsize(760, 520)
         root.protocol("WM_DELETE_WINDOW", self.hide)
         theme.apply(root)
@@ -213,8 +214,7 @@ class App:
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
-        self.gaming_switch = GamingSwitch(top, self.toggle_gaming)
-        self.gaming_switch.pack(side="right", padx=(0, 10))
+        self.gaming_switch = self.header  # the header's toggle pill is the gaming mode switch
 
         # the one-sentence briefing, and warnings under it
         self.briefing = Briefing(outer)
@@ -244,19 +244,12 @@ class App:
         self.running.pack(fill="x")
         bottom = ttk.Frame(overview)
         bottom.pack(fill="both", expand=True, pady=(6, 0))
-        left, right = ttk.Frame(bottom), ttk.Frame(bottom)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
-        right.grid(row=0, column=1, sticky="nsew")
-        bottom.columnconfigure(0, weight=1, uniform="bottom")
-        bottom.columnconfigure(1, weight=1, uniform="bottom")
+        left = ttk.Frame(bottom)
+        left.pack(fill="both", expand=True)
         self.next_title = Section(left, "Next up")
         self.next_title.pack(fill="x", pady=(0, 6))
         self.next_list = NextList(left, lambda: self.show_view("Details"))
         self.next_list.pack(fill="x")
-        self.power_title = Section(right, "Where your PC's power goes", badge=False)
-        self.power_title.pack(fill="x", pady=(0, 6))
-        self.power = PowerBars(right)
-        self.power.pack(fill="x")
 
         # DETAILS: every table, as before
         details = self.details = ttk.Frame(views)
@@ -302,22 +295,11 @@ class App:
         (self.overview if view == "Overview" else self.details).pack(fill="both", expand=True)
 
     def brand(self):
-        """The header: Khaltron as a sentinel drone (sentinel.py), and a red laser line under it."""
-        self.header = SentinelHeader(self.root)
+        """The header, after the owner's design (khaltron-header.css): the robot watching the six busiest programs
+        on its ledge, cyan while monitoring, red when gaming mode hunts (monitor/hunter.py)."""
+        self.header = KhaltronHeader(self.root, self.toggle_gaming, height=260)
         self.header.pack(fill="x")
-        glow = tk.Canvas(self.root, height=2, highlightthickness=0, bg=theme.BG)
-        glow.pack(fill="x")
-        glow.bind("<Configure>", lambda event: self.glow_line(glow, event.width))
-
-    @staticmethod
-    def glow_line(canvas: tk.Canvas, width: int):
-        """A thin laser line under the header: dark red at the ends, bright in the middle."""
-        canvas.delete("all")
-        steps = 60
-        for i in range(steps):
-            t = 1 - abs(i / (steps - 1) * 2 - 1)  # 0 at the ends, 1 in the middle
-            colour = theme.mix(theme.LASER_DARK, theme.LASER, t)
-            canvas.create_rectangle(width * i / steps, 0, width * (i + 1) / steps + 1, 2, fill=colour, width=0)
+        tk.Frame(self.root, height=1, bg=theme.LINE).pack(fill="x")
 
     # --- reading in the background --------------------------------------------------------------------------
     def reader(self):
@@ -409,7 +391,8 @@ class App:
         self.running.show(state.running, now)
         self.next_list.show(state.waiting)
         self.next_title.count(len(state.waiting))
-        self.power.show(state.programs)
+        frozen = {item["pid"] for item in (read_json(gaming.FLAG, {}) or {}).get("frozen", [])} if playing else set()
+        self.header.show_programs(state.programs, frozen)
         self.briefing.show(*briefing(state, playing))
         self.running_title.count(len(state.running))
         self.waiting_title.count(len(state.waiting))
