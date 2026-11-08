@@ -1,4 +1,4 @@
-"""Khaltron's look: a sentinel drone that watches your jobs. Near-black gunmetal, one laser-red eye, red as the
+"""Khaltron 9000's look: a cybernetic sentinel drone (Terminator style) that watches your jobs. Near-black gunmetal, one laser-red eye, red as the
 accent; green stays for running jobs and amber for warnings, so the lists stay easy to read. Also its logo (the
 drone's eye) and a dark Windows title bar. Everything about colours and fonts lives here; ui.py and sentinel.py
 only use the names below.
@@ -13,8 +13,9 @@ from tkinter import ttk
 
 from PIL import Image, ImageDraw, ImageFilter
 
-NAME = "Khaltron"
-TAGLINE = "sentinel online  ·  watching every job on this machine"
+NAME = "Khaltron 9000"
+WORD, NUMBER = "KHALTRON", "9000"  # the header draws the model number in laser red
+TAGLINE = "cybernetic sentinel  \u00b7  model K-9000  \u00b7  all jobs under surveillance"
 
 # the palette
 BG = "#07080b"        # window: almost black
@@ -58,6 +59,7 @@ def apply(root: tk.Tk) -> ttk.Style:
                     padding=(10, 4), relief="flat", font=(FONT, 9))
     style.map("TButton", background=[("disabled", BG), ("pressed", LASER_DARK), ("active", "#22252e")],
               foreground=[("disabled", DIM), ("active", LASER)], bordercolor=[("active", LASER), ("disabled", LINE)])
+    style.configure("Card.TButton", padding=(8, 2), font=(FONT, 8))
     style.configure("TMenubutton", background=LASER_DARK, foreground="#fff1f2", bordercolor=LASER, arrowcolor="#fff1f2",
                     padding=(10, 4), relief="flat", font=(FONT, 9, "bold"))
     style.map("TMenubutton", background=[("active", "#a3121f")])
@@ -129,7 +131,7 @@ def mix(a: str, b: str, t: float) -> str:
 
 
 def logo(size: int = 64) -> Image.Image:
-    """Khaltron's mark: the sentinel drone seen from the front. A round armoured body with side fins, and one
+    """Khaltron 9000's mark: the sentinel drone seen from the front. A round armoured body with side fins, and one
     laser-red eye narrowed by two slanted armour plates, so it looks like it is glaring at you. Drawn 4x and
     shrunk, so its edges are smooth at any size (tray, window, desktop icon)."""
     big = size * 4

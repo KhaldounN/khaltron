@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from . import planned
 from .config import BOOK, CONFIG
 from .model import Job
-from .sources import book_library, book_main, book_stage2, processes, scheduled
+from .sources import book_library, book_main, book_stage2, processes, programs, scheduled
 from .sources import health as health_source
 
 
@@ -24,6 +24,7 @@ class State:
     errors: list[str] = field(default_factory=list)
     jobs_mb: float = 0.0    # RAM used by every running job together (each process counted once)
     jobs_cpu: float = 0.0   # their CPU, percent of the whole CPU
+    programs: list = field(default_factory=list)  # every program on the PC (sources/programs.py), busiest first
     taken: float = 0.0
 
 
@@ -45,6 +46,19 @@ def collect(slow: bool = False) -> State:
 
     procs = attempt("processes", processes.snapshot) or {}
     state.health = attempt("health", health_source.read)
+    state.programs = attempt("programs", programs.read) or []
+    h = state.health
+    if h and state.programs:
+        # what no program owns, so the section adds up to the PC's totals (as Task Manager's do)
+        cpu_left = h.cpu - sum(a.cpu for a in state.programs)
+        ram_left = h.used_mb - sum(a.memory_mb for a in state.programs)
+        if cpu_left >= 0.5:
+            state.programs.append(programs.Program("Windows: drivers, interrupts, short-lived processes", 0, cpu_left,
+                                                   0.0, False, []))
+        if ram_left > 0:
+            state.programs.append(programs.Program("Windows: kernel, drivers, shared and cache memory", 0, 0.0,
+                                                   ram_left, False, []))
+        state.programs.sort(key=lambda a: (-round(a.cpu, 1), -a.memory_mb))
     state.processes = attempt("processes", lambda: processes.rows(procs)) or []
 
     # running first: the book analysis, then stage 2, the library job, and planned jobs

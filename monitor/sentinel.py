@@ -80,33 +80,51 @@ class SentinelHeader(tk.Canvas):
         self.upper_edge = self.create_line(0, 0, 0, 0, 0, 0, fill=theme.METAL, width=2)
         self.create_oval(EYE_X - VISOR, EYE_Y - VISOR, EYE_X + VISOR, EYE_Y + VISOR, outline=theme.METAL, width=2)
 
-        # the name, letter by letter (wide spacing), and the tagline
+        # the name, letter by letter (wide spacing): KHALTRON in white, the model number 9000 in laser red
         big = tkfont.Font(family=theme.FONT, size=22, weight="bold")
         x = 124
         self.letters = []
-        for letter in theme.NAME.upper():
-            self.letters.append(self.create_text(x, 38, text=letter, anchor="w", font=big, fill=theme.TEXT))
-            x += big.measure(letter) + 5
+        self.letter_colour = {}
+        for word, colour, gap in ((theme.WORD, theme.TEXT, 16), (theme.NUMBER, theme.LASER, 0)):
+            for letter in word:
+                item = self.create_text(x, 38, text=letter, anchor="w", font=big, fill=colour)
+                self.letters.append(item)
+                self.letter_colour[item] = colour
+                x += big.measure(letter) + 5
+            x += gap
         self.create_text(126, 66, text=theme.TAGLINE.upper(), anchor="w", font=(theme.FONT, 8, "bold"),
                          fill=theme.LASER)
 
+        # the machine's HUD readout (only when the window is wide enough not to cover the tagline)
+        self.readout = []
+        if w >= 1000:
+            for i in range(3):
+                self.readout.append(self.create_text(w - 200, 26 + i * 20, text="", anchor="e",
+                                                     font=(theme.MONO, 9), fill=theme.LASER_DARK))
+            self.create_line(w - 186, 16, w - 186, HEIGHT - 16, fill=theme.LASER_DARK)
         # the status corner
-        self.state_text = self.create_text(w - 18, 26, text="◉ WATCHING", anchor="e",
+        self.state_text = self.create_text(w - 18, 26, text="◉ SCANNING", anchor="e",
                                            font=(theme.FONT, 10, "bold"), fill=theme.LASER)
         self.clock = self.create_text(w - 18, 48, text="", anchor="e", font=(theme.MONO, 13), fill=theme.TEXT)
         self.counts = self.create_text(w - 18, 70, text="", anchor="e", font=(theme.MONO, 9), fill=theme.MUTED)
+        self.status(*self.last_status)
 
     def resized(self, event):
         if event.width != self.width:
-            texts = (self.itemcget(self.counts, "text"),) if self.letters else ("",)
             self.width = event.width
             self.draw_static()
-            self.itemconfigure(self.counts, text=texts[0])
 
     # --- what the window tells it -------------------------------------------------------------------------------
+    last_status = (0, 0, False)
+
     def status(self, running: int, waiting: int, alert: bool):
         self.alert = alert
-        self.itemconfigure(self.counts, text=f"{running} RUNNING · {waiting} QUEUED")
+        self.last_status = (running, waiting, alert)
+        self.itemconfigure(self.counts, text=f"{running} ACTIVE · {waiting} QUEUED")
+        lines = ["MODE ....... SURVEILLANCE", f"TARGETS .... {running} ACTIVE / {waiting} QUEUED",
+                 f"THREAT ..... {'HIGH' if alert else 'LOW'}"]
+        for item, text in zip(self.readout, lines):
+            self.itemconfigure(item, text=text)
 
     # --- the animation ------------------------------------------------------------------------------------------
     def tick(self):
@@ -162,16 +180,20 @@ class SentinelHeader(tk.Canvas):
         for letter in self.letters:
             x0, _, x1, _ = self.bbox(letter)
             near = abs((x0 + x1) / 2 - target) < 26
-            self.itemconfigure(letter, fill=theme.LASER_HOT if near else theme.TEXT)
+            self.itemconfigure(letter, fill=theme.LASER_HOT if near else self.letter_colour[letter])
 
         # the scan line rolls down every 3 seconds
         y = (t % 3) / 3 * HEIGHT
         self.coords(self.scanline, 0, y, self.width, y)
         # status corner and fin lights blink
         on = (t * (2.5 if alert else 1.0)) % 1 < 0.6
-        self.itemconfigure(self.state_text, text="◉ ALERT" if alert else "◉ WATCHING",
+        self.itemconfigure(self.state_text, text="◉ THREAT DETECTED" if alert else "◉ SCANNING",
                            fill=(theme.LASER if on else theme.LASER_DARK) if alert else
                            theme.mix(theme.LASER_DARK, theme.LASER, 0.4 + 0.6 * pulse))
+        # the readout glows with the eye; the threat line blinks on an alert
+        for i, item in enumerate(self.readout):
+            hot = alert and i == 2 and on
+            self.itemconfigure(item, fill=theme.LASER if hot else theme.mix(theme.LASER_DARK, theme.LASER, 0.35 + 0.3 * pulse))
         for light in self.fin_lights:
             self.itemconfigure(light, fill=theme.LASER if on else theme.LASER_DARK)
         self.itemconfigure(self.clock, text=time.strftime("%H:%M:%S"))

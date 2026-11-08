@@ -7,7 +7,7 @@ from . import gaming, theme
 
 
 def icon_image(size: int = 64) -> Image.Image:
-    """Khaltron's logo (theme.logo): a glowing cyan hexagon with a K."""
+    """Khaltron 9000's logo (theme.logo): the sentinel drone's red eye."""
     return theme.logo(size)
 
 

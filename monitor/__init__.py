@@ -1,1 +1,1 @@
-"""Khaltron (the Job Monitor): one window that shows the background jobs running on this PC and the ones queued after them."""
+"""Khaltron 9000 (the Job Monitor): one window that shows the background jobs running on this PC and the ones queued after them."""

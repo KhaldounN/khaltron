@@ -1,13 +1,15 @@
-# Khaltron
+# Khaltron 9000
 
-**A sentinel for your background jobs.** Khaltron is a small Windows desktop app that watches the long-running jobs
+**A cybernetic sentinel for your background jobs.** Khaltron 9000 is a small Windows desktop app that watches the long-running jobs
 on your PC, the ones that run for hours in the background (data processing, AI model runs, batch scripts), and
-shows you in one dark, drone-themed window:
+shows you in one dark, Terminator-style window, watched over by a red-eyed drone:
 
 - **what is running now**: what each job is doing, its progress, how long it has run, time left, and its RAM and CPU;
 - **what is queued after it**, and what each waiting job is waiting for;
 - **what finished or failed**, with its log one click away;
-- **how much of your PC is free**: RAM in use (the same numbers as Task Manager), CPU, and how much of that your jobs take.
+- **how much of your PC is free**: RAM in use (the same numbers as Task Manager), CPU, and how much of that your jobs take;
+- **where all of your PC's power goes**: every program you run (apps, browsers, games) and Windows itself, grouped
+  by program, with its share of the CPU and the RAM.
 
 It also gives you a simple **job queue** (`jobq`): line jobs up and they run one at a time, each when the one it
 waits for is done. So two heavy jobs never fight over your memory, and an AI assistant or a script can queue work you
@@ -17,6 +19,11 @@ can still see and control.
 
 ## Features
 
+- **HUD cards** for RAM, CPU and your jobs, each with a live graph of the last 3 minutes; running jobs as cards with
+  glowing progress bars, their RAM and CPU, and their own buttons.
+- **Programs on this PC**: everything running, grouped by program (Chrome's 30 processes are one row). It reads every
+  process in one Windows call (as Task Manager does), so it costs a few milliseconds. What no program owns (drivers,
+  interrupts, kernel and cache memory) gets its own row, so the totals add up. Watch-only: nothing there can be stopped.
 - **Live view**, refreshed every 2 seconds. It only *reads* status files and process info, so it never slows a job down.
 - **Planned queue**: `jobq add --name "..." --after previous -- python my_script.py`. A small runner process starts the
   jobs in order and keeps going when the window is closed.
@@ -43,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 `install.ps1` makes a Python environment (`.venv`) with the four packages it needs (`psutil`, `pystray`, `pillow`,
-`pytest`), a desktop shortcut **Khaltron** (hotkey **Ctrl+Alt+J**), and a logon task that starts it in the tray.
+`pytest`), a desktop shortcut **Khaltron 9000** (hotkey **Ctrl+Alt+J**), and a logon task that starts it in the tray.
 Prefer to do it by hand?
 
 ```powershell
@@ -112,10 +119,11 @@ Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\p
 |---|---|
 | `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
 | `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
-| `monitor\sentinel.py` | the animated header: the drone's scanning red eye and its laser |
+| `monitor\sentinel.py` | the animated header: the drone's scanning red eye, its laser, the HUD readout |
+| `monitor\hud.py` | the stat cards with live graphs, the running-job cards, the section headers |
 | `monitor\theme.py` | every colour and font, the logo, the dark title bar |
 | `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |
-| `monitor\sources\` | the readers (jobs, processes, PC health, scheduled tasks) |
+| `monitor\sources\` | the readers (jobs, processes, every program on the PC, PC health, scheduled tasks) |
 | `monitor\planned.py`, `monitor\runner.py`, `jobq.py` | the planned queue, the process that runs it, and its command line |
 | `monitor\actions.py`, `monitor\protect.py` | what the buttons do, and the never-stop list |
 | `monitor\alerts.py`, `monitor\tray.py` | notifications, history, the tray icon |

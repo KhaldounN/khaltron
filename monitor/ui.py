@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
+from .hud import RunningPanel, Section, StatCard
 from .sentinel import SentinelHeader
 from .collect import State, collect
 from .config import BOOK, CONFIG
@@ -25,6 +26,21 @@ def bar(progress: float | None, width: int = 10) -> str:
     progress = max(0.0, min(1.0, progress))
     full = round(progress * width)
     return "▰" * full + "▱" * (width - full) + f" {progress * 100:.0f}%"
+
+
+def share_bar(share: float, width: int = 10) -> str:
+    """A text bar for a table cell: how big a share of the whole this is."""
+    share = max(0.0, min(1.0, share))
+    full = round(share * width)
+    return f"{share * 100:4.1f}%  " + "\u25ae" * full + "\u25af" * (width - full)
+
+
+def program_row(program) -> Job:
+    """A Programs-section row (sources/programs.py) in the shape the tables show."""
+    windows = not program.yours
+    return Job(id=f"app:{program.name}", name=program.name, source="Windows" if windows else "You",
+               state=DONE if windows else WAITING, cpu=program.cpu, memory_mb=program.memory_mb,
+               ref={"count": program.processes or ""})
 
 
 def pct(value: float | None) -> str:
@@ -120,7 +136,7 @@ class App:
         self.hidden_once = False
         self.gaming_was = None  # gaming mode at the last refresh (a change pops up a notification)
         root.title(theme.NAME)
-        root.geometry("1080x760")
+        root.geometry("1160x900")
         root.minsize(760, 520)
         root.protocol("WM_DELETE_WINDOW", self.hide)
         theme.apply(root)
@@ -137,21 +153,16 @@ class App:
         outer = ttk.Frame(self.root, padding=(14, 10, 14, 10))
         outer.pack(fill="both", expand=True)
 
+        cards = ttk.Frame(outer)
+        cards.pack(fill="x")
+        self.ram_card = StatCard(cards, "RAM in use")
+        self.cpu_card = StatCard(cards, "CPU")
+        self.jobs_card = StatCard(cards, "Your background jobs")
+        for column, card in enumerate((self.ram_card, self.cpu_card, self.jobs_card)):
+            card.grid(row=0, column=column, sticky="we", padx=(0 if column == 0 else 8, 0))
+            cards.columnconfigure(column, weight=1, uniform="cards")
         top = ttk.Frame(outer)
-        top.pack(fill="x")
-        ttk.Label(top, text="RAM", style="Small.TLabel").pack(side="left")
-        self.memory_bar = tk.Canvas(top, width=SEGMENTS * 9, height=16, highlightthickness=0, bg=theme.BG)
-        self.memory_bar.pack(side="left", padx=6)
-        self.memory_text = ttk.Label(top, text="...", style="Stat.TLabel")
-        self.memory_text.pack(side="left")
-        ttk.Label(top, text="CPU", style="Small.TLabel").pack(side="left", padx=(20, 0))
-        self.cpu_bar = tk.Canvas(top, width=SEGMENTS * 9, height=16, highlightthickness=0, bg=theme.BG)
-        self.cpu_bar.pack(side="left", padx=6)
-        self.cpu_text = ttk.Label(top, text="", style="Stat.TLabel")
-        self.cpu_text.pack(side="left")
-        ttk.Label(top, text="JOBS", style="Small.TLabel").pack(side="left", padx=(20, 6))
-        self.jobs_text = ttk.Label(top, text="", style="Stat.TLabel")
-        self.jobs_text.pack(side="left")
+        top.pack(fill="x", pady=(8, 0))
         start = ttk.Menubutton(top, text="Start / control")
         menu = tk.Menu(start, tearoff=False)
         menu.add_command(label="Add a job to the planned queue...", command=self.add_dialog)
@@ -178,30 +189,31 @@ class App:
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
 
-        self.flags = ttk.Label(outer, text="", style="Flag.TLabel")
-        self.flags.pack(fill="x", pady=(4, 0))
+        self.flags = ttk.Label(top, text="", style="Flag.TLabel")
+        self.flags.pack(side="left", fill="x", expand=True)
+
+        # running jobs above the resizable panes: the cards take exactly the room they need
+        self.running_title = Section(outer, "Now running")
+        self.running_title.pack(fill="x", pady=(10, 6))
+        self.running = RunningPanel(outer, self)
+        self.running.pack(fill="x")
 
         panes = ttk.PanedWindow(outer, orient="vertical")
-        panes.pack(fill="both", expand=True, pady=(6, 0))
+        panes.pack(fill="both", expand=True, pady=(4, 0))
 
         box = ttk.Frame(panes)
-        ttk.Label(box, text="Now running", style="Section.TLabel").pack(anchor="w")
-        self.running = Table(box, self, [("name", "Job", 220), ("source", "From", 95), ("step", "Doing now", 290),
-                                         ("progress", "Progress", 110), ("time", "Running for", 85),
-                                         ("left", "Time left", 75), ("memory", "Memory", 70), ("cpu", "CPU", 55)],
-                             ["stop", "pause2", "log", "folder"], height=4)
-        self.running.pack(fill="both", expand=True)
-        panes.add(box, weight=2)
-
-        box = ttk.Frame(panes)
-        ttk.Label(box, text="Up next", style="Section.TLabel").pack(anchor="w", pady=(8, 0))
+        self.waiting_title = Section(box, "Up next")
+        self.waiting_title.pack(fill="x", pady=(8, 6))
         self.waiting = Table(box, self, [("pos", "#", 36), ("name", "Job", 270), ("source", "Queue", 110),
                                          ("step", "Waiting for", 380), ("added", "Added", 90)],
-                             ["up", "down", "runnow", "remove", "stop", "log"], height=6)
+                             ["up", "down", "runnow", "remove", "stop", "log"], height=5)
         self.waiting.pack(fill="both", expand=True)
-        panes.add(box, weight=3)
+        panes.add(box, weight=2)
 
         tabs = ttk.Notebook(panes)
+        self.apps = Table(tabs, self, [("name", "Program", 300), ("who", "Started by", 90), ("count", "Processes", 80),
+                                       ("cpu", "CPU", 60), ("share", "Share of the CPU", 170), ("memory", "RAM", 80),
+                                       ("rshare", "Share of the RAM", 170)], [], height=6)
         self.finished = Table(tabs, self, [("name", "Job", 270), ("source", "From", 110), ("state", "Result", 80),
                                            ("step", "Details", 380), ("when", "Ended", 90)], ["log"], height=6)
         self.tasks = Table(tabs, self, [("name", "Task", 250), ("state", "State", 80), ("step", "Status", 330),
@@ -211,6 +223,7 @@ class App:
                            ["stop"], height=6)
         self.problems = tk.Text(tabs, height=6, wrap="word", font=(theme.MONO, 9), relief="flat", bg=theme.PANEL,
                                 fg=theme.MUTED, insertbackground=theme.LASER, padx=10, pady=8, highlightthickness=0)
+        tabs.add(self.apps, text="Programs on this PC")
         tabs.add(self.finished, text="Finished")
         tabs.add(self.tasks, text="Scheduled tasks")
         tabs.add(self.procs, text="Python processes")
@@ -288,17 +301,20 @@ class App:
         if h:
             limit = CONFIG["low_memory_mb"]
             colour = RED if h.free_mb < limit else AMBER if h.free_mb < 2 * limit else GREEN
-            # RAM: the bar shows what is IN USE, like Task Manager; its colour warns when little is left
+            # RAM: what is IN USE, like Task Manager; the colour warns when little is left
             used_share = h.used_mb / h.total_mb if h.total_mb else 0
-            gauge(self.memory_bar, used_share, colour)
-            self.memory_text.configure(
-                text=f"{gb(h.used_mb)} used of {gb(h.total_mb)} ({used_share * 100:.0f}%) \u00b7 {gb(h.free_mb)} free",
-                foreground=colour)
+            self.ram_card.update_value(used_share, f"{gb(h.used_mb)} / {gb(h.total_mb)}",
+                                       f"{used_share * 100:.0f}% in use\n{gb(h.free_mb)} free for new work", colour)
             cpu_colour = RED if h.cpu > 85 else AMBER if h.cpu > 60 else GREEN
-            gauge(self.cpu_bar, h.cpu / 100, cpu_colour)
-            self.cpu_text.configure(text=f"{h.cpu:.0f}% of {h.cores} threads", foreground=cpu_colour)
-        other = f"  (other programs: {gb(max(0, h.used_mb - state.jobs_mb))})" if h else ""
-        self.jobs_text.configure(text=f"{gb(state.jobs_mb) or '0 MB'} RAM \u00b7 {state.jobs_cpu:.0f}% CPU{other}")
+            top_app = next((a for a in state.programs if a.cpu >= 1 and not a.name.startswith("Windows:")), None)
+            busiest = top_app.name.split(" (")[0] if top_app else ""
+            self.cpu_card.update_value(h.cpu / 100, f"{h.cpu:.0f}%", f"of {h.cores} threads"
+                                       + (f"\nbusiest: {busiest} {top_app.cpu:.0f}%" if top_app else ""),
+                                       cpu_colour)
+            others = max(0, h.used_mb - state.jobs_mb)
+            self.jobs_card.update_value(state.jobs_cpu / 100, f"{state.jobs_cpu:.0f}%  {gb(state.jobs_mb) or '0 MB'}",
+                                        f"CPU and RAM of {len(state.running)} running\nall else: {gb(others)} RAM",
+                                        theme.LASER)
         alert = bool(h and h.free_mb < CONFIG["low_memory_mb"]) or any(
             j.state == FAILED and j.finished and now - j.finished < 600 for j in state.finished)
         self.header.status(len(state.running), len(state.waiting), alert)
@@ -318,9 +334,13 @@ class App:
             flags.append("Memory is low: a new job may be ended by Windows.")
         self.flags.configure(text="   ".join(flags))
 
-        self.running.show(state.running, lambda i, j: (
-            j.name, j.source, j.step, bar(j.progress), duration(now - j.started) if j.started else "",
-            f"~{duration(j.eta_minutes * 60)}" if j.eta_minutes else "", gb(j.memory_mb), pct(j.cpu)))
+        self.running.show(state.running, now)
+        self.running_title.count(len(state.running))
+        self.waiting_title.count(len(state.waiting))
+        total_mb = h.total_mb if h else 1
+        self.apps.show([program_row(a) for a in state.programs], lambda i, j: (
+            j.name, j.source, j.ref["count"], pct(j.cpu), share_bar(j.cpu / 100), gb(j.memory_mb),
+            share_bar(j.memory_mb / total_mb)))
         self.waiting.show(state.waiting, lambda i, j: (
             i + 1, j.name, j.source, j.step, when(j.started)))
         history = sorted(state.finished + alerts.history(), key=lambda j: j.finished or 0, reverse=True)[:40]

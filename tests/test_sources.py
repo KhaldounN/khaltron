@@ -78,3 +78,23 @@ def test_health_reports_ram_in_use_like_task_manager():
     found = health.read()
     assert found.used_mb + found.ram_free_mb == found.total_mb
     assert found.cores >= 1 and 0 <= found.cpu <= 100
+
+
+def test_programs_on_this_pc_are_read_in_one_quick_call():
+    """Every process at once (NtQuerySystemInformation), grouped by program; CPU as a share of the whole CPU."""
+    import sys
+    import time as clock
+    from monitor.sources import programs
+    if sys.platform != "win32":
+        assert programs.read() == []
+        return
+    programs.read()
+    clock.sleep(0.5)
+    started = clock.perf_counter()
+    found = programs.read()
+    assert clock.perf_counter() - started < 1.0  # asking process by process took 4-8 s
+    names = [p.name for p in found]
+    assert "Python (incl. your background jobs)" in names  # this test itself is a python process
+    assert all(0 <= p.cpu <= 100.5 and p.memory_mb >= 0 for p in found)
+    assert sum(p.processes for p in found) > 20
+    assert any(not p.yours for p in found)  # Windows' own services are there too
