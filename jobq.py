@@ -39,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     add.add_argument("--log")
     add.add_argument("--after", action="append", default=[])
     add.add_argument("--normal", action="store_true")
+    # the command: everything from the first word that isn't an option. Needed because PowerShell removes "--"
+    # when it calls a script (& jobq.ps1 add ... -- cmd), so the "--" above never arrives from jobq.ps1.
+    add.add_argument("rest", nargs=argparse.REMAINDER)
     begin = sub.add_parser("begin")
     begin.add_argument("--name", required=True)
     begin.add_argument("--pid", type=int, required=True)
@@ -57,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.action == "add":
+        command = command or args.rest
         if not command:
             parser.error("give the command after --")
         job_id = planned.add(args.name, command, args.cwd, args.after, args.log, "normal" if args.normal else "below")

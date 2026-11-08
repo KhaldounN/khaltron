@@ -60,6 +60,10 @@ def _lock() -> bool:
 def command_for(entry: dict) -> list[str]:
     """A .ps1 script is run by PowerShell; anything else as it is."""
     command = list(entry["command"])
+    # a relative program (".venv\Scripts\python.exe") means the one in the job's folder: on Windows, Popen
+    # does not look for it there by itself
+    if command and entry.get("cwd") and not Path(command[0]).is_absolute() and (Path(entry["cwd"]) / command[0]).exists():
+        command[0] = str(Path(entry["cwd"]) / command[0])
     if command and command[0].lower().endswith(".ps1"):
         return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *command]
     return command

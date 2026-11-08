@@ -83,3 +83,10 @@ def test_jobq_cli_add_and_list(state_dir, capsys):
     assert job_id in listed and "From Claude" in listed
     _, waiting, _ = planned.jobs_from(planned.load())
     assert waiting[0].step == "waits for the library pre-analysis"
+
+
+def test_jobq_add_works_without_the_double_dash(state_dir, capsys):
+    """PowerShell drops '--' when it runs jobq.ps1: the command starts at the first word that isn't an option."""
+    import jobq
+    jobq.main(["add", "--name", "No dash", "--after", "previous", PY, "-u", "script.py", "--style", "x"])
+    assert planned.load()[0]["command"] == [PY, "-u", "script.py", "--style", "x"]
