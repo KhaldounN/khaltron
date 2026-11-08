@@ -68,6 +68,7 @@ class Table(ttk.Frame):
     def __init__(self, parent, app, columns: list[tuple[str, str, int]], buttons: list[str], height: int = 5):
         super().__init__(parent)
         self.app, self.jobs = app, {}
+        self.shown: dict[str, tuple] = {}  # row id -> (values, tags) last written
         self.tree = ttk.Treeview(self, columns=[c[0] for c in columns], show="headings", height=height,
                                  selectmode="browse")
         for key, title, width in columns:
@@ -112,17 +113,26 @@ class Table(ttk.Frame):
         flat = values
         values = lambda i, j: tuple(" ".join(str(v).split()) if isinstance(v, str) else v for v in flat(i, j))
         self.jobs = {job.id: job for job in jobs}
-        present = set(self.tree.get_children())
-        for gone in present - set(self.jobs):
+        present = list(self.tree.get_children())
+        for gone in set(present) - set(self.jobs):
             self.tree.delete(gone)
+            self.shown.pop(gone, None)
+        order = [row for row in present if row in self.jobs]
         for index, job in enumerate(jobs):
             tag = "protected" if job.ref.get("protected") else job.state
-            if job.id in present:
-                self.tree.item(job.id, values=values(index, job), tags=(tag, "odd") if index % 2 else (tag,))
-                self.tree.move(job.id, "", index)
+            row = (values(index, job), (tag, "odd") if index % 2 else (tag,))
+            if job.id not in self.shown:
+                self.tree.insert("", index, iid=job.id, values=row[0], tags=row[1])
+                order.insert(index, job.id)
             else:
-                self.tree.insert("", index, iid=job.id, values=values(index, job),
-                                 tags=(tag, "odd") if index % 2 else (tag,))
+                # only rows that changed are touched: rewriting ~80 unchanged rows every 2 s cost real CPU
+                if self.shown[job.id] != row:
+                    self.tree.item(job.id, values=row[0], tags=row[1])
+                if index >= len(order) or order[index] != job.id:
+                    self.tree.move(job.id, "", index)
+                    order.remove(job.id)
+                    order.insert(index, job.id)
+            self.shown[job.id] = row
         self.enable()
 
 

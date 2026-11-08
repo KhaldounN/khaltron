@@ -186,3 +186,16 @@ def save_icon(path) -> None:
     """A Windows .ico with every usual size, for the desktop shortcut."""
     logo(256).save(path, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
+
+
+def pace(widget: tk.Misc, fast_ms: int, background: int = 250) -> int:
+    """How long to wait before an animation's next frame: smooth while you look at the window, slow when another
+    window has the focus, nearly stopped while it is hidden in the tray. (An animation nobody sees is wasted CPU.)"""
+    try:
+        if not widget.winfo_viewable():
+            return 600
+        if widget.focus_get() is None:  # another program has the focus
+            return background
+    except (tk.TclError, KeyError):
+        return 600
+    return fast_ms

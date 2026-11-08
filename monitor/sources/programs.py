@@ -16,6 +16,7 @@ import sys
 import time
 from ctypes import wintypes
 from dataclasses import dataclass
+from typing import NamedTuple
 
 # friendly names for common programs (by process name, lower case); anything else shows its own name
 FRIENDLY = {
@@ -65,8 +66,21 @@ class _ProcessInfo(ctypes.Structure):
 _buffer = ctypes.create_string_buffer(1 << 20)
 
 
-def snapshot() -> dict[int, tuple[str, int, int, int]]:
-    """pid -> (name, cpu time in 100 ns units, private working set in bytes, session)."""
+class Sample(NamedTuple):
+    """One process, as one refresh saw it."""
+    name: str
+    cpu: float          # percent of the WHOLE CPU since the previous sample (0 on the first)
+    private_mb: float   # private working set (Task Manager's "Memory")
+    session: int        # 0 = a Windows service; your programs run in your login session
+    ppid: int           # the process that started it
+    started: float      # when it started, as time.time()
+
+
+EPOCH_GAP = 11644473600  # seconds from 1601 (Windows' clock start) to 1970 (time.time()'s)
+
+
+def snapshot() -> dict[int, tuple[str, int, int, int, int, int]]:
+    """pid -> (name, cpu time in 100 ns units, private working set in bytes, session, parent pid, create time)."""
     global _buffer
     query = ctypes.windll.ntdll.NtQuerySystemInformation
     needed = wintypes.ULONG(0)
@@ -85,7 +99,8 @@ def snapshot() -> dict[int, tuple[str, int, int, int]]:
         name = (ctypes.wstring_at(entry.ImageName.Buffer, entry.ImageName.Length // 2)
                 if entry.ImageName.Buffer and entry.ImageName.Length else "")
         if pid:  # pid 0 is the System Idle Process: not work
-            found[pid] = (name, entry.UserTime + entry.KernelTime, entry.WorkingSetPrivateSize, entry.SessionId)
+            found[pid] = (name, entry.UserTime + entry.KernelTime, entry.WorkingSetPrivateSize, entry.SessionId,
+                          entry.InheritedFromUniqueProcessId or 0, entry.CreateTime)
         if not entry.NextEntryOffset:
             return found
         offset += entry.NextEntryOffset
@@ -98,36 +113,51 @@ def _my_session() -> int:
 
 
 CORES = os.cpu_count() or 1
-_last: tuple[float, dict[int, int]] = (0.0, {})  # (when, pid -> cpu time) from the previous look
+_last: tuple[float, dict[int, int]] = (0.0, {})  # (when, pid -> cpu time) from the previous sample
 _session: int | None = None
 
 
-def read() -> list[Program]:
-    """Programs, busiest first (CPU, then RAM). Empty on a system other than Windows."""
-    global _last, _session
-    if sys.platform != "win32":
-        return []
+def my_session() -> int:
+    global _session
     if _session is None:
         _session = _my_session()
+    return _session
+
+
+def sample() -> dict[int, Sample]:
+    """Every process with its CPU since the previous sample. Take ONE per refresh and share it (two samples a
+    moment apart would each see only that moment). Empty on a system other than Windows."""
+    global _last
+    if sys.platform != "win32":
+        return {}
     now = time.perf_counter()
     found = snapshot()
     before_time, before = _last
     elapsed = (now - before_time) * 1e7 * CORES if before_time else 0  # in 100 ns units, all processors
-    _last = (now, {pid: cpu for pid, (_, cpu, _, _) in found.items()})
-
-    groups: dict[str, Program] = {}
-    for pid, (name, cpu_time, private, session) in found.items():
+    _last = (now, {pid: raw[1] for pid, raw in found.items()})
+    out = {}
+    for pid, (name, cpu_time, private, session, ppid, created) in found.items():
         used = cpu_time - before.get(pid, cpu_time)
-        cpu = max(0.0, used / elapsed * 100) if elapsed else 0.0
-        yours = session == _session
-        key = name.lower()
-        label = FRIENDLY.get(key) or (os.path.splitext(name)[0] if yours and name else SYSTEM_GROUP)
+        out[pid] = Sample(name, max(0.0, used / elapsed * 100) if elapsed else 0.0, private / 2 ** 20, session,
+                          ppid, created / 1e7 - EPOCH_GAP if created else 0.0)
+    return out
+
+
+def read(taken: dict[int, Sample] | None = None) -> list[Program]:
+    """Programs, busiest first (CPU, then RAM), from a sample (taken now if none is given)."""
+    taken = sample() if taken is None else taken
+    mine = my_session() if taken else 0
+    groups: dict[str, Program] = {}
+    for pid, item in taken.items():
+        yours = item.session == mine
+        key = item.name.lower()
+        label = FRIENDLY.get(key) or (os.path.splitext(item.name)[0] if yours and item.name else SYSTEM_GROUP)
         group = groups.get(label)
         if group is None:
             group = groups[label] = Program(label, 0, 0.0, 0.0, False, [])
         group.processes += 1
-        group.cpu += cpu
-        group.memory_mb += private / 2 ** 20
+        group.cpu += item.cpu
+        group.memory_mb += item.private_mb
         group.yours = group.yours or yours
         group.pids.append(pid)
     return sorted(groups.values(), key=lambda g: (-round(g.cpu, 1), -g.memory_mb))

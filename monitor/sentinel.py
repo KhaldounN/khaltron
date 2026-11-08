@@ -2,7 +2,8 @@
 
 A tkinter Canvas redrawn 25 times a second (only moving or recolouring a few shapes, so it costs almost nothing):
 - the drone's red eye drifts left and right behind two armour plates, as if scanning;
-- a see-through red laser cone sweeps from the eye across the header, with a bright line at its centre;
+- a red laser line sweeps from the eye across the header (a see-through cone was dropped: Windows repainted the
+  whole area under it on every frame, the header's main CPU cost);
 - a faint scan line rolls down, like an old security monitor;
 - the glow pulses. On an alert (a job failed lately, or memory is low) it pulses faster and redder, the plates
   close in (a narrower, angrier eye) and the status says ALERT.
@@ -16,7 +17,7 @@ import tkinter.font as tkfont
 from . import theme
 
 HEIGHT = 96
-FPS = 25
+FPS = 10  # smooth enough for a slow scan; every frame costs CPU (Windows repaints what moved)
 EYE_X, EYE_Y = 60, 48
 VISOR = 22          # the dark visor's radius
 SCAN = 7            # how far the pupil drifts left and right
@@ -44,15 +45,21 @@ class SentinelHeader(tk.Canvas):
     def draw_static(self):
         self.delete("all")
         w = self.width
-        for x in range(0, w, 24):  # a faint HUD grid
-            self.create_line(x, 0, x, HEIGHT, fill="#11141a")
+        # a faint HUD grid, as ONE picture: 55 separate lines were all redrawn whenever anything moved over them
+        from PIL import Image, ImageDraw, ImageTk
+        grid = Image.new("RGB", (max(w, 1), HEIGHT), theme.PANEL)
+        pen = ImageDraw.Draw(grid)
+        for x in range(0, w, 24):
+            pen.line([(x, 0), (x, HEIGHT)], fill="#11141a")
         for y in range(0, HEIGHT, 24):
-            self.create_line(0, y, w, y, fill="#11141a")
-        # the laser cone (below the text, so the name stays readable) and its bright centre line
-        self.beam = self.create_polygon(0, 0, 0, 0, 0, 0, fill=theme.LASER, outline="", stipple="gray12")
+            pen.line([(0, y), (w, y)], fill="#11141a")
+        self.grid_image = ImageTk.PhotoImage(grid)
+        self.create_image(0, 0, image=self.grid_image, anchor="nw")
+        # the laser line (below the text, so the name stays readable) and the dot where it lands
         self.ray = self.create_line(0, 0, 0, 0, fill=theme.LASER, width=1)
         self.dot = self.create_oval(0, 0, 0, 0, fill=theme.LASER_HOT, outline="")
-        self.scanline = self.create_line(0, 0, w, 0, fill=theme.mix(theme.PANEL, theme.LASER, 0.28))
+        # the scan line rolls inside the drone's target frame only (full width, it repainted the whole header)
+        self.scanline = self.create_line(EYE_X - 44, 0, EYE_X + 44, 0, fill=theme.mix(theme.PANEL, theme.LASER, 0.4))
 
         # HUD corner brackets around the drone
         x0, y0, x1, y1, k = EYE_X - 44, 6, EYE_X + 44, HEIGHT - 6, 10
@@ -85,6 +92,7 @@ class SentinelHeader(tk.Canvas):
         x = 124
         self.letters = []
         self.letter_colour = {}
+        self.centres = None  # the letters are new shapes: where they are is worked out again
         for word, colour, gap in ((theme.WORD, theme.TEXT, 16), (theme.NUMBER, theme.LASER, 0)):
             for letter in word:
                 item = self.create_text(x, 38, text=letter, anchor="w", font=big, fill=colour)
@@ -133,7 +141,7 @@ class SentinelHeader(tk.Canvas):
                 self.frame(time.time() - self.started)
         except tk.TclError:
             return  # the window was closed
-        self.after(1000 // FPS if self.winfo_viewable() else 500, self.tick)
+        self.after(theme.pace(self, 1000 // FPS, background=500), self.tick)
 
     def frame(self, t: float):
         alert = self.alert
@@ -172,19 +180,21 @@ class SentinelHeader(tk.Canvas):
         span = max(200, self.width - 330)
         sweep = 0.5 + 0.5 * math.sin(t * 0.45 * speed)
         target = 120 + span * sweep
-        half = 34 + 10 * pulse
-        self.coords(self.beam, ex + 9, ey, target - half, HEIGHT, target + half, HEIGHT)
         self.coords(self.ray, ex + 9, ey, target, HEIGHT)
         self.coords(self.dot, target - 3, HEIGHT - 3, target + 3, HEIGHT + 3)
         # a letter of the name lights up red while the laser crosses it
-        for letter in self.letters:
-            x0, _, x1, _ = self.bbox(letter)
-            near = abs((x0 + x1) / 2 - target) < 26
-            self.itemconfigure(letter, fill=theme.LASER_HOT if near else self.letter_colour[letter])
+        if not getattr(self, "centres", None) or len(self.centres) != len(self.letters):
+            self.centres = {item: (lambda b: (b[0] + b[2]) / 2)(self.bbox(item)) for item in self.letters}
+            self.lit = set()
+        for letter, centre in self.centres.items():  # recolour only the letters the laser enters or leaves
+            near = abs(centre - target) < 26
+            if near != (letter in self.lit):
+                self.itemconfigure(letter, fill=theme.LASER_HOT if near else self.letter_colour[letter])
+                (self.lit.add if near else self.lit.discard)(letter)
 
         # the scan line rolls down every 3 seconds
         y = (t % 3) / 3 * HEIGHT
-        self.coords(self.scanline, 0, y, self.width, y)
+        self.coords(self.scanline, EYE_X - 42, y, EYE_X + 42, y)
         # status corner and fin lights blink
         on = (t * (2.5 if alert else 1.0)) % 1 < 0.6
         self.itemconfigure(self.state_text, text="◉ THREAT DETECTED" if alert else "◉ SCANNING",
@@ -196,4 +206,7 @@ class SentinelHeader(tk.Canvas):
             self.itemconfigure(item, fill=theme.LASER if hot else theme.mix(theme.LASER_DARK, theme.LASER, 0.35 + 0.3 * pulse))
         for light in self.fin_lights:
             self.itemconfigure(light, fill=theme.LASER if on else theme.LASER_DARK)
-        self.itemconfigure(self.clock, text=time.strftime("%H:%M:%S"))
+        now = time.strftime("%H:%M:%S")
+        if now != getattr(self, "shown_time", None):  # the clock changes once a second, not every frame
+            self.shown_time = now
+            self.itemconfigure(self.clock, text=now)

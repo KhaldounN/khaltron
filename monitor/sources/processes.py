@@ -39,8 +39,9 @@ class Proc:
     protected: bool
 
 
-CORES = psutil.cpu_count() or 1  # logical processors: psutil gives a process's CPU as % of ONE of them
-_seen: dict[int, psutil.Process] = {}  # kept between refreshes: CPU % is measured since the last look
+CORES = psutil.cpu_count() or 1  # logical processors: Proc.cpu is a % of ONE of them, like psutil's
+_cmdlines: dict[tuple[int, float], str] = {}  # (pid, start time) -> command line: it never changes
+_children: dict[int, list[int]] = {}          # parent pid -> its child pids, from the last snapshot
 
 
 def label_for(cmdline: str) -> tuple[str, bool, bool]:
@@ -51,40 +52,74 @@ def label_for(cmdline: str) -> tuple[str, bool, bool]:
     return "", False, False
 
 
-def snapshot() -> dict[int, Proc]:
-    """Every python (and PowerShell) process, with its memory and CPU."""
+def _cmdline(pid: int, started: float) -> str:
+    key = (pid, round(started, 2))
+    if key not in _cmdlines:
+        try:
+            _cmdlines[key] = " ".join(psutil.Process(pid).cmdline())
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            _cmdlines[key] = ""
+    return _cmdlines[key]
+
+
+def snapshot(taken: dict | None = None) -> dict[int, Proc]:
+    """Every python (and PowerShell) process, with its memory and CPU, from the refresh's shared sample
+    (programs.sample(): one Windows call for all processes). Only these few processes' command lines are read,
+    once each. Before, asking Windows about every process's memory and command line took ~2.5 s a refresh."""
+    from . import programs
+    taken = programs.sample() if taken is None else taken
+    if not taken:  # not Windows
+        return _snapshot_psutil()
+    _children.clear()
     found: dict[int, Proc] = {}
-    alive = set()
-    for process in psutil.process_iter(["pid", "name", "cmdline", "memory_info", "create_time"]):
+    for pid, item in taken.items():
+        _children.setdefault(item.ppid, []).append(pid)
+        if item.name.lower() not in PYTHON:
+            continue
+        cmdline = _cmdline(pid, item.started)
+        label, known, protected = label_for(cmdline)
+        found[pid] = Proc(pid, item.name, cmdline, item.private_mb, item.cpu * CORES, item.started, label, known,
+                          protected or pid == os.getpid())
+    alive = {(pid, round(item.started, 2)) for pid, item in taken.items()}
+    for key in [k for k in _cmdlines if k not in alive]:
+        del _cmdlines[key]
+    return found
+
+
+def _snapshot_psutil() -> dict[int, Proc]:
+    """The same with psutil, for a system other than Windows (slower)."""
+    found: dict[int, Proc] = {}
+    for process in psutil.process_iter(["pid", "name", "cmdline", "memory_info", "create_time", "cpu_percent"]):
         info = process.info
         if (info.get("name") or "").lower() not in PYTHON:
             continue
-        pid = info["pid"]
-        alive.add(pid)
-        cached = _seen.setdefault(pid, process)
-        try:
-            cpu = cached.cpu_percent(None)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            cpu = 0.0
         cmdline = " ".join(info.get("cmdline") or [])
         label, known, protected = label_for(cmdline)
         memory = info.get("memory_info")
-        found[pid] = Proc(pid, info["name"], cmdline, memory.rss / 2 ** 20 if memory else 0.0, cpu,
-                          info.get("create_time") or 0.0, label, known, protected or pid == os.getpid())
-    for pid in list(_seen):
-        if pid not in alive:
-            del _seen[pid]
+        found[info["pid"]] = Proc(info["pid"], info["name"], cmdline, memory.rss / 2 ** 20 if memory else 0.0,
+                                  info.get("cpu_percent") or 0.0, info.get("create_time") or 0.0, label, known,
+                                  protected or info["pid"] == os.getpid())
     return found
 
 
 def family(pid: int | None) -> set[int]:
-    """A process and everything it started (a job's real size: PowerShell scripts start python children)."""
+    """A process and everything it started (a job's real size: PowerShell scripts start python children),
+    from the last snapshot's parent links (no extra call to Windows)."""
     if not pid:
         return set()
-    try:
-        return {pid} | {c.pid for c in psutil.Process(pid).children(recursive=True)}
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return {pid}
+    if not _children:
+        try:
+            return {pid} | {c.pid for c in psutil.Process(pid).children(recursive=True)}
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return {pid}
+    out, todo = set(), [pid]
+    while todo:
+        current = todo.pop()
+        if current in out:
+            continue
+        out.add(current)
+        todo.extend(_children.get(current, []))
+    return out
 
 
 def tree_memory(pid: int | None, procs: dict[int, Proc]) -> float | None:

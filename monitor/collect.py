@@ -44,9 +44,11 @@ def collect(slow: bool = False) -> State:
             state.errors.append(f"{what}: {traceback.format_exc(limit=2).strip().splitlines()[-1]}")
             return None
 
-    procs = attempt("processes", processes.snapshot) or {}
+    # ONE look at every process for this refresh, shared by every reader below
+    taken = attempt("process sample", programs.sample) or {}
+    procs = attempt("processes", lambda: processes.snapshot(taken)) or {}
     state.health = attempt("health", health_source.read)
-    state.programs = attempt("programs", programs.read) or []
+    state.programs = attempt("programs", lambda: programs.read(taken)) or []
     h = state.health
     if h and state.programs:
         # what no program owns, so the section adds up to the PC's totals (as Task Manager's do)

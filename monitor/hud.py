@@ -141,48 +141,80 @@ class JobCard(tk.Frame):
         if self.job and action in self.job.actions:
             self.app.act(self.job, action)
 
+    def _set(self, widget, **options):
+        """Change a label only when something changed: every change makes Tk lay out and repaint the window."""
+        key = (id(widget), tuple(sorted(options.items())))
+        if self._last.get(id(widget)) != key:
+            self._last[id(widget)] = key
+            widget.configure(**options)
+
     def show(self, job: Job, now: float):
         self.job = job
+        if not hasattr(self, "_last"):
+            self._last, self._buttons = {}, None
         colour = SOURCE_COLOURS.get(job.source, theme.GREEN)
-        self.edge.configure(bg=colour)
-        self.source.configure(text=job.source.upper(), bg=colour)
-        self.name.configure(text=job.name)
-        self.step.configure(text=" ".join(str(job.step).split())[:160] or "working...")
+        self._set(self.edge, bg=colour)
+        self._set(self.source, text=job.source.upper(), bg=colour)
+        self._set(self.name, text=job.name)
+        self._set(self.step, text=" ".join(str(job.step).split())[:160] or "working...")
         ran = duration(now - job.started) if job.started else ""
         left = f"  ·  ~{duration(job.eta_minutes * 60)} left" if job.eta_minutes else ""
-        self.times.configure(text=f"{ran}{left}")
+        self._set(self.times, text=f"{ran}{left}")
         cpu = f"{job.cpu:.0f}%" if job.cpu is not None else "-"
-        self.stats.configure(text=f"RAM {gb(job.memory_mb):>7}\nCPU {cpu:>7}")
-        for action, button in self.buttons.items():
-            if action in job.actions:
-                button.pack(side="left", padx=(4, 0))
-            else:
+        self._set(self.stats, text=f"RAM {gb(job.memory_mb):>7}\nCPU {cpu:>7}")
+        wanted = [a for a in self.buttons if a in job.actions]
+        if wanted != self._buttons:  # buttons are re-packed only when the job's actions change
+            self._buttons = wanted
+            for button in self.buttons.values():
                 button.pack_forget()
+            for action in wanted:
+                self.buttons[action].pack(side="left", padx=(4, 0))
         self.colour = colour
 
-    def animate(self, t: float):
-        """The progress bar: a glowing fill with a bright head; a scanning segment when progress is unknown."""
+    def _bar_items(self):
+        """The bar's shapes, made once: each frame only moves and recolours them (deleting and re-making every
+        shape 20 times a second was most of the window's own CPU)."""
         bar = self.bar
-        bar.delete("all")
+        self.items = {
+            "track": bar.create_rectangle(0, 3, 0, 9, fill=theme.RAISED, width=0),
+            "halo": bar.create_rectangle(0, 1, 0, 11, width=0),
+            "fill": bar.create_rectangle(0, 3, 0, 9, width=0),
+            "head": bar.create_rectangle(0, 0, 0, 12, fill=theme.TEXT, width=0),
+            "pct": bar.create_text(0, 6, text="", font=(theme.MONO, 8, "bold"), fill=theme.TEXT),
+        }
+        self.shown_pct = None
+
+    def animate(self, t: float):
+        """The progress bar: a glowing fill with a bright head. When progress is unknown (a planned job, say) only
+        the still, empty track shows (the owner found a moving bar there distracting)."""
+        bar = self.bar
         w = bar.winfo_width()
         if w < 10 or self.job is None:
             return
-        bar.create_rectangle(0, 3, w, 9, fill=theme.RAISED, width=0)
+        if not hasattr(self, "items"):
+            self._bar_items()
+        items = self.items
+        bar.coords(items["track"], 0, 3, w, 9)
         progress = self.job.progress
         colour = getattr(self, "colour", theme.GREEN)
-        if progress is None:
-            x = (math.sin(t * 1.6) * 0.5 + 0.5) * (w - 80)
-            for i in range(8):  # a short comet that fades behind it
-                bar.create_rectangle(x + i * 10, 3, x + i * 10 + 8, 9, width=0,
-                                     fill=theme.mix(theme.RAISED, colour, (i + 1) / 8))
+        unknown = progress is None
+        for key in ("halo", "fill", "head", "pct"):
+            bar.itemconfigure(items[key], state="hidden" if unknown else "normal")
+        if unknown:
             return
         fill = max(2, w * max(0.0, min(1.0, progress)))
         glow = 0.55 + 0.45 * math.sin(t * 3)
-        bar.create_rectangle(0, 1, fill, 11, fill=theme.mix(theme.PANEL, colour, 0.25 * glow), width=0)
-        bar.create_rectangle(0, 3, fill, 9, fill=theme.mix(theme.mix(theme.BG, colour, 0.55), colour, glow), width=0)
-        bar.create_rectangle(fill - 3, 0, fill, 12, fill=theme.TEXT, width=0)  # the bright head
-        bar.create_text(min(fill + 6, w - 4), 6, text=f"{progress * 100:.0f}%", anchor="w" if fill + 40 < w else "e",
-                        font=(theme.MONO, 8, "bold"), fill=theme.TEXT)
+        bar.coords(items["halo"], 0, 1, fill, 11)
+        bar.itemconfigure(items["halo"], fill=theme.mix(theme.PANEL, colour, 0.25 * glow))
+        bar.coords(items["fill"], 0, 3, fill, 9)
+        bar.itemconfigure(items["fill"], fill=theme.mix(theme.mix(theme.BG, colour, 0.55), colour, glow))
+        bar.coords(items["head"], fill - 3, 0, fill, 12)
+        text = f"{progress * 100:.0f}%"
+        if text != self.shown_pct:
+            self.shown_pct = text
+            bar.itemconfigure(items["pct"], text=text)
+        bar.coords(items["pct"], min(fill + 6, w - 4), 6)
+        bar.itemconfigure(items["pct"], anchor="w" if fill + 40 < w else "e")
 
 
 class RunningPanel(tk.Frame):
@@ -210,20 +242,24 @@ class RunningPanel(tk.Frame):
         self.after(50, self.tick)
 
     def show(self, jobs: list[Job], now: float):
+        order = [j.id for j in jobs]
         for job_id in list(self.cards):
-            if job_id not in {j.id for j in jobs}:
+            if job_id not in order:
                 self.cards.pop(job_id).destroy()
-        for card in self.cards.values():
-            card.pack_forget()
-        self.empty.pack_forget()
-        if not jobs:
-            self.empty.pack(fill="x")
         for job in jobs:
             card = self.cards.get(job.id)
             if card is None:
                 card = self.cards[job.id] = JobCard(self.inner, self.app)
             card.show(job, now)
-            card.pack(fill="x", pady=(0, 6))
+        if order != getattr(self, "order", None):  # re-arranged only when the jobs (or their order) change
+            self.order = order
+            for card in self.cards.values():
+                card.pack_forget()
+            self.empty.pack_forget()
+            if not jobs:
+                self.empty.pack(fill="x")
+            for job_id in order:
+                self.cards[job_id].pack(fill="x", pady=(0, 6))
 
     def _fit(self, _event=None):
         """As tall as the cards, up to MAX_HEIGHT; the scrollbar only when they don't fit."""
@@ -249,7 +285,7 @@ class RunningPanel(tk.Frame):
                 t = time.time() - self.started
                 for card in self.cards.values():
                     card.animate(t)
-            self.after(50 if self.winfo_viewable() else 500, self.tick)
+            self.after(theme.pace(self, 66), self.tick)  # 15 frames a second while you look at it
         except tk.TclError:
             pass
 
