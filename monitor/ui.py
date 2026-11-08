@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
-from .hud import GamingSwitch, RunningPanel, Section, StatCard
+from .hud import Briefing, GamingSwitch, NextList, PowerBars, RunningPanel, Section, StatCard, ViewSwitch
 from .sentinel import SentinelHeader
 from .collect import State, collect
 from .config import BOOK, CONFIG
@@ -26,6 +26,26 @@ def bar(progress: float | None, width: int = 10) -> str:
     progress = max(0.0, min(1.0, progress))
     full = round(progress * width)
     return "▰" * full + "▱" * (width - full) + f" {progress * 100:.0f}%"
+
+
+def briefing(state: State, playing: bool) -> tuple[str, str, str]:
+    """(chip, colour, sentence): the whole picture in one plain sentence."""
+    h = state.health
+    running, waiting = len(state.running), len(state.waiting)
+    jobs = (f"{running} job{'s' if running != 1 else ''} running" if running else "No jobs running") + \
+        (f", {waiting} waiting." if waiting else ", nothing waiting.")
+    if playing:
+        return "GAMING", theme.LASER, "Gaming mode is on: background jobs are frozen so your game gets the PC."
+    if not h:
+        return "SCANNING", theme.MUTED, jobs
+    pc = f"CPU {h.cpu:.0f}%, {gb(h.free_mb)} of memory free."
+    if h.free_mb < CONFIG["low_memory_mb"]:
+        return "LOW MEMORY", theme.RED, f"{jobs} Memory is running out: {pc}"
+    if h.cpu > 85:
+        return "BUSY", theme.AMBER, f"{jobs} Your PC is very busy: {pc}"
+    if running:
+        return "WORKING", theme.GREEN, f"{jobs} Your PC has room to spare: {pc}"
+    return "CALM", theme.GREEN, f"{jobs} Your PC is calm: {pc}"
 
 
 def share_bar(share: float, width: int = 10) -> str:
@@ -163,16 +183,11 @@ class App:
         outer = ttk.Frame(self.root, padding=(14, 10, 14, 10))
         outer.pack(fill="both", expand=True)
 
-        cards = ttk.Frame(outer)
-        cards.pack(fill="x")
-        self.ram_card = StatCard(cards, "RAM in use")
-        self.cpu_card = StatCard(cards, "CPU")
-        self.jobs_card = StatCard(cards, "Your background jobs")
-        for column, card in enumerate((self.ram_card, self.cpu_card, self.jobs_card)):
-            card.grid(row=0, column=column, sticky="we", padx=(0 if column == 0 else 8, 0))
-            cards.columnconfigure(column, weight=1, uniform="cards")
+        # the toolbar: which view (left); gaming mode, hide, the control menu (right)
         top = ttk.Frame(outer)
-        top.pack(fill="x", pady=(8, 0))
+        top.pack(fill="x")
+        self.view_switch = ViewSwitch(top, ["Overview", "Details"], self.show_view)
+        self.view_switch.pack(side="left")
         start = ttk.Menubutton(top, text="Start / control")
         menu = tk.Menu(start, tearoff=False)
         menu.add_command(label="Add a job to the planned queue...", command=self.add_dialog)
@@ -201,38 +216,73 @@ class App:
         self.gaming_switch = GamingSwitch(top, self.toggle_gaming)
         self.gaming_switch.pack(side="right", padx=(0, 10))
 
-        self.flags = ttk.Label(top, text="", style="Flag.TLabel")
-        self.flags.pack(side="left", fill="x", expand=True)
+        # the one-sentence briefing, and warnings under it
+        self.briefing = Briefing(outer)
+        self.briefing.pack(fill="x", pady=(12, 0))
+        self.flags = ttk.Label(outer, text="", style="Flag.TLabel")
+        self.flags.pack(fill="x", pady=(4, 0))
 
-        # running jobs above the resizable panes: the cards take exactly the room they need
-        self.running_title = Section(outer, "Now running")
+        # the status line first, at the bottom: packed after the views it got no room left
+        self.status = ttk.Label(outer, text="Starting...", style="Small.TLabel")
+        self.status.pack(side="bottom", fill="x", pady=(6, 0))
+        views = ttk.Frame(outer)
+        views.pack(fill="both", expand=True, pady=(8, 0))
+
+        # OVERVIEW: what matters at a glance
+        overview = self.overview = ttk.Frame(views)
+        cards = ttk.Frame(overview)
+        cards.pack(fill="x")
+        self.ram_card = StatCard(cards, "RAM in use")
+        self.cpu_card = StatCard(cards, "CPU")
+        self.jobs_card = StatCard(cards, "Your background jobs")
+        for column, card in enumerate((self.ram_card, self.cpu_card, self.jobs_card)):
+            card.grid(row=0, column=column, sticky="we", padx=(0 if column == 0 else 10, 0))
+            cards.columnconfigure(column, weight=1, uniform="cards")
+        self.running_title = Section(overview, "Now running")
         self.running_title.pack(fill="x", pady=(10, 6))
-        self.running = RunningPanel(outer, self)
+        self.running = RunningPanel(overview, self)
         self.running.pack(fill="x")
+        bottom = ttk.Frame(overview)
+        bottom.pack(fill="both", expand=True, pady=(6, 0))
+        left, right = ttk.Frame(bottom), ttk.Frame(bottom)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
+        right.grid(row=0, column=1, sticky="nsew")
+        bottom.columnconfigure(0, weight=1, uniform="bottom")
+        bottom.columnconfigure(1, weight=1, uniform="bottom")
+        self.next_title = Section(left, "Next up")
+        self.next_title.pack(fill="x", pady=(0, 6))
+        self.next_list = NextList(left, lambda: self.show_view("Details"))
+        self.next_list.pack(fill="x")
+        self.power_title = Section(right, "Where your PC's power goes", badge=False)
+        self.power_title.pack(fill="x", pady=(0, 6))
+        self.power = PowerBars(right)
+        self.power.pack(fill="x")
 
-        panes = ttk.PanedWindow(outer, orient="vertical")
-        panes.pack(fill="both", expand=True, pady=(4, 0))
+        # DETAILS: every table, as before
+        details = self.details = ttk.Frame(views)
+        panes = ttk.PanedWindow(details, orient="vertical")
+        panes.pack(fill="both", expand=True)
 
         box = ttk.Frame(panes)
         self.waiting_title = Section(box, "Up next")
-        self.waiting_title.pack(fill="x", pady=(8, 6))
+        self.waiting_title.pack(fill="x", pady=(0, 6))
         self.waiting = Table(box, self, [("pos", "#", 36), ("name", "Job", 270), ("source", "Queue", 110),
                                          ("step", "Waiting for", 380), ("added", "Added", 90)],
-                             ["up", "down", "runnow", "remove", "stop", "log"], height=5)
+                             ["up", "down", "runnow", "remove", "stop", "log"], height=6)
         self.waiting.pack(fill="both", expand=True)
         panes.add(box, weight=2)
 
         tabs = ttk.Notebook(panes)
         self.apps = Table(tabs, self, [("name", "Program", 300), ("who", "Started by", 90), ("count", "Processes", 80),
                                        ("cpu", "CPU", 60), ("share", "Share of the CPU", 170), ("memory", "RAM", 80),
-                                       ("rshare", "Share of the RAM", 170)], [], height=6)
+                                       ("rshare", "Share of the RAM", 170)], [], height=8)
         self.finished = Table(tabs, self, [("name", "Job", 270), ("source", "From", 110), ("state", "Result", 80),
-                                           ("step", "Details", 380), ("when", "Ended", 90)], ["log"], height=6)
+                                           ("step", "Details", 380), ("when", "Ended", 90)], ["log"], height=8)
         self.tasks = Table(tabs, self, [("name", "Task", 250), ("state", "State", 80), ("step", "Status", 330),
-                                        ("last", "Last run", 100), ("next", "Next run", 100)], ["runtask"], height=6)
+                                        ("last", "Last run", 100), ("next", "Next run", 100)], ["runtask"], height=8)
         self.procs = Table(tabs, self, [("name", "Process", 250), ("pid", "PID", 70), ("memory", "Memory", 80),
                                         ("cpu", "CPU", 60), ("time", "Running for", 90), ("step", "Command", 380)],
-                           ["stop"], height=6)
+                           ["stop"], height=8)
         self.problems = tk.Text(tabs, height=6, wrap="word", font=(theme.MONO, 9), relief="flat", bg=theme.PANEL,
                                 fg=theme.MUTED, insertbackground=theme.LASER, padx=10, pady=8, highlightthickness=0)
         tabs.add(self.apps, text="Programs on this PC")
@@ -241,9 +291,15 @@ class App:
         tabs.add(self.procs, text="Python processes")
         tabs.add(self.problems, text="Problems")
         panes.add(tabs, weight=3)
+        self.show_view("Overview")
 
-        self.status = ttk.Label(outer, text="Starting...", style="Small.TLabel")
-        self.status.pack(fill="x", pady=(6, 0))
+
+    def show_view(self, view: str):
+        """Overview (simple, the default) or Details (every table)."""
+        self.view_switch.select(view)
+        self.overview.pack_forget()
+        self.details.pack_forget()
+        (self.overview if view == "Overview" else self.details).pack(fill="both", expand=True)
 
     def brand(self):
         """The header: Khaltron as a sentinel drone (sentinel.py), and a red laser line under it."""
@@ -351,6 +407,10 @@ class App:
         self.flags.configure(text="   ".join(flags))
 
         self.running.show(state.running, now)
+        self.next_list.show(state.waiting)
+        self.next_title.count(len(state.waiting))
+        self.power.show(state.programs)
+        self.briefing.show(*briefing(state, playing))
         self.running_title.count(len(state.running))
         self.waiting_title.count(len(state.waiting))
         total_mb = h.total_mb if h else 1

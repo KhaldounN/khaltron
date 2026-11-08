@@ -15,10 +15,14 @@ It also gives you a simple **job queue** (`jobq`): line jobs up and they run one
 waits for is done. So two heavy jobs never fight over your memory, and an AI assistant or a script can queue work you
 can still see and control.
 
-![Khaltron watching book analyses, with more jobs queued](assets/screenshot.png)
+![Khaltron 9000's Overview: a one-line briefing, RAM / CPU / jobs cards, the running jobs, what is next, and where the PC's power goes](assets/screenshot.png)
 
 ## Features
 
+- **Two views.** *Overview* (the default) is the whole picture at a glance: a one-sentence briefing with a status
+  chip (CALM, WORKING, BUSY, LOW MEMORY, GAMING), the RAM / CPU / jobs cards, the running jobs, the next three
+  jobs, and the five programs using the most CPU. *Details* has every table: the full queue with its buttons,
+  every program on the PC, finished jobs, scheduled tasks, Python processes and problems.
 - **HUD cards** for RAM, CPU and your jobs, each with a live graph of the last 3 minutes; running jobs as cards with
   glowing progress bars, their RAM and CPU, and their own buttons.
 - **Programs on this PC**: everything running, grouped by program (Chrome's 30 processes are one row). It reads every
@@ -32,8 +36,11 @@ can still see and control.
 - **Protected processes**: things that must never be stopped (by default: a voice server, a website, Khaltron itself)
   have no Stop button, and are checked again right before any stop.
 - **Notifications**: a Windows pop-up when a job starts, finishes or fails, and when free memory runs low.
-- **Gaming mode**: one click (or Ctrl+Alt+G) freezes every background job so a game gets the CPU and memory, and
-  puts everything back when you switch it off.
+- **Gaming mode**: one click on the GAMING MODE switch (or Ctrl+Alt+G) freezes every background job, any other
+  heavy Python script of yours and safe background apps (OneDrive by default) so a game gets the CPU and memory,
+  and puts everything back when you switch it off. A pop-up says what was frozen and how much memory it freed.
+- **Light on your PC**: one Windows call per refresh reads every process (~55 ms), and the animations slow down
+  when another window has the focus and stop in the tray. The window itself uses about 1% of the CPU.
 - **Tray icon**: closing the window hides it next to the clock. It can start with Windows.
 
 ## Requirements
@@ -120,7 +127,7 @@ Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\p
 | `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
 | `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
 | `monitor\sentinel.py` | the animated header: the drone's scanning red eye, its laser, the HUD readout |
-| `monitor\hud.py` | the stat cards with live graphs, the running-job cards, the section headers |
+| `monitor\hud.py` | the stat cards with live graphs, the job cards, the gaming switch, the overview parts |
 | `monitor\theme.py` | every colour and font, the logo, the dark title bar |
 | `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |
 | `monitor\sources\` | the readers (jobs, processes, every program on the PC, PC health, scheduled tasks) |

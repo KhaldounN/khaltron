@@ -29,12 +29,15 @@ def gb(mb):
 class Section(tk.Frame):
     """'▍NOW RUNNING  [3] ──────────' : a HUD heading with a count badge and a rule line."""
 
-    def __init__(self, parent, title: str):
+    def __init__(self, parent, title: str, badge: bool = True):
         super().__init__(parent, bg=theme.BG)
         tk.Frame(self, bg=theme.LASER, width=3, height=16).pack(side="left", padx=(0, 8))
         tk.Label(self, text=title.upper(), font=(theme.FONT, 10, "bold"), fg=theme.TEXT, bg=theme.BG).pack(side="left")
         self.badge = tk.Label(self, text="0", font=(theme.MONO, 9, "bold"), fg=theme.LASER, bg=theme.SELECT, padx=6)
-        self.badge.pack(side="left", padx=8)
+        if badge:
+            self.badge.pack(side="left", padx=8)
+        else:
+            tk.Frame(self, width=8, bg=theme.BG).pack(side="left")
         self.rule = tk.Canvas(self, height=10, bg=theme.BG, highlightthickness=0)
         self.rule.pack(side="left", fill="x", expand=True)
         self.rule.bind("<Configure>", self._draw_rule)
@@ -56,7 +59,7 @@ class StatCard(tk.Canvas):
     """A HUD panel: a small label, a big number, a line under it, and a live graph of the last 3 minutes."""
 
     def __init__(self, parent, label: str):
-        super().__init__(parent, height=96, bg=theme.PANEL, highlightthickness=0)
+        super().__init__(parent, height=84, bg=theme.PANEL, highlightthickness=0)
         self.label = label
         self.history: deque[float] = deque(maxlen=HISTORY)
         self.value, self.sub, self.colour, self.share = "-", "", theme.TEXT, 0.0
@@ -96,8 +99,8 @@ class StatCard(tk.Canvas):
         # the words
         self.create_text(14, 14, text=self.label.upper(), anchor="w", font=(theme.FONT, 8, "bold"), fill=theme.MUTED)
         size = 17 if w * 0.5 > 230 else 14  # a narrow window: a smaller number, so it never runs into the graph
-        self.create_text(14, 38, text=self.value, anchor="w", font=(theme.MONO, size, "bold"), fill=self.colour)
-        self.create_text(14, 58, text=self.sub, anchor="nw", font=(theme.FONT, 8), fill=theme.MUTED)
+        self.create_text(14, 35, text=self.value, anchor="w", font=(theme.MONO, size, "bold"), fill=self.colour)
+        self.create_text(14, 52, text=self.sub, anchor="nw", font=(theme.FONT, 8), fill=theme.MUTED)
 
 
 # --- running-job cards ----------------------------------------------------------------------------------------------
@@ -354,3 +357,133 @@ class GamingSwitch(tk.Canvas):
             self.after(80 if self.on or self.busy else 400, self.tick)
         except tk.TclError:
             pass
+
+
+# --- the simple overview ------------------------------------------------------------------------------------------
+class ViewSwitch(tk.Frame):
+    """[ OVERVIEW | DETAILS ]: two tabs drawn as one segmented control; the chosen one is lit."""
+
+    def __init__(self, parent, views: list[str], on_change):
+        super().__init__(parent, bg=theme.LINE, padx=1, pady=1)
+        self.on_change, self.labels, self.current = on_change, {}, None
+        for view in views:
+            label = tk.Label(self, text=view.upper(), font=(theme.FONT, 9, "bold"), padx=16, pady=5, cursor="hand2")
+            label.pack(side="left", padx=(0 if not self.labels else 1, 0))
+            label.bind("<Button-1>", lambda e, v=view: self.on_change(v))
+            self.labels[view] = label
+        self.select(views[0])
+
+    def select(self, view: str):
+        self.current = view
+        for name, label in self.labels.items():
+            on = name == view
+            label.configure(bg=theme.SELECT if on else theme.PANEL, fg=theme.TEXT if on else theme.MUTED)
+
+
+class Briefing(tk.Frame):
+    """The one-sentence summary at the top: a status chip (CALM, WORKING, BUSY, LOW MEMORY, GAMING) and what is
+    going on in plain words, with a machine-style prompt above it."""
+
+    def __init__(self, parent):
+        super().__init__(parent, bg=theme.BG)
+        tk.Label(self, text="> SYSTEM BRIEFING", font=(theme.MONO, 8), fg=theme.LASER_DARK, bg=theme.BG).pack(anchor="w")
+        row = tk.Frame(self, bg=theme.BG)
+        row.pack(fill="x", pady=(2, 0))
+        self.chip = tk.Label(row, font=(theme.FONT, 9, "bold"), padx=10, pady=2)
+        self.chip.pack(side="left")
+        self.sentence = tk.Label(row, font=(theme.FONT, 11), fg=theme.TEXT, bg=theme.BG, anchor="w", justify="left")
+        self.sentence.pack(side="left", padx=12, fill="x", expand=True)
+        self.shown = None
+
+    def show(self, chip: str, colour: str, sentence: str):
+        if (chip, colour, sentence) == self.shown:
+            return
+        self.shown = (chip, colour, sentence)
+        self.chip.configure(text=chip, bg=colour, fg=theme.BG)
+        self.sentence.configure(text=sentence)
+        self.sentence.configure(wraplength=max(300, self.winfo_width() - 160))
+
+
+class NextList(tk.Frame):
+    """The next few waiting jobs, in plain words; '+N more' opens the Details view."""
+
+    SHOWN = 3
+
+    def __init__(self, parent, on_more):
+        super().__init__(parent, bg=theme.BG)
+        self.on_more, self.shown = on_more, None
+        self.rows = tk.Frame(self, bg=theme.BG)
+        self.rows.pack(fill="x")
+
+    def show(self, jobs: list[Job]):
+        key = tuple((j.id, j.name, j.step) for j in jobs[:self.SHOWN]) + (len(jobs),)
+        if key == self.shown:
+            return
+        self.shown = key
+        for child in self.rows.winfo_children():
+            child.destroy()
+        if not jobs:
+            tk.Label(self.rows, text="Nothing waiting.", font=(theme.FONT, 10), fg=theme.DIM, bg=theme.BG,
+                     anchor="w").pack(fill="x", pady=4)
+            return
+        for number, job in enumerate(jobs[:self.SHOWN], 1):
+            row = tk.Frame(self.rows, bg=theme.PANEL, highlightthickness=1, highlightbackground=theme.LINE)
+            row.pack(fill="x", pady=(0, 3))
+            tk.Label(row, text=str(number), font=(theme.MONO, 10, "bold"), fg=theme.LASER, bg=theme.PANEL,
+                     width=3).pack(side="left", padx=(4, 2), pady=4)
+            words = tk.Frame(row, bg=theme.PANEL)
+            words.pack(side="left", fill="x", expand=True, pady=3)
+            tk.Label(words, text=job.name, font=(theme.FONT, 10, "bold"), fg=theme.TEXT, bg=theme.PANEL,
+                     anchor="w").pack(fill="x")
+            step = " ".join(str(job.step).split())
+            tk.Label(words, text=step[:90] + ("..." if len(step) > 90 else ""), font=(theme.FONT, 8),
+                     fg=theme.MUTED, bg=theme.PANEL, anchor="w").pack(fill="x")
+        more = len(jobs) - self.SHOWN
+        if more > 0:
+            link = tk.Label(self.rows, text=f"+ {more} more  ▸  see Details", font=(theme.FONT, 9, "bold"),
+                            fg=theme.LASER, bg=theme.BG, cursor="hand2", anchor="w")
+            link.pack(fill="x", pady=(2, 0))
+            link.bind("<Button-1>", lambda e: self.on_more())
+
+
+class PowerBars(tk.Canvas):
+    """Where the PC's power goes: the top programs as simple bars of their share of the CPU, with their RAM."""
+
+    ROWS, ROW_H = 5, 26
+    SHORT = {"Python (incl. your background jobs)": "Python (your jobs)",
+             "Windows: drivers, interrupts, short-lived processes": "Windows (drivers, interrupts)",
+             "Windows: kernel, drivers, shared and cache memory": "Windows (kernel memory)"}
+
+    def __init__(self, parent):
+        super().__init__(parent, height=self.ROWS * self.ROW_H + 4, bg=theme.BG, highlightthickness=0)
+        self.programs = []
+        self.bind("<Configure>", lambda e: self.redraw())
+
+    def show(self, programs):
+        top = sorted(programs, key=lambda p: -p.cpu)[:self.ROWS]
+        key = [(p.name, round(p.cpu), round(p.memory_mb, -1)) for p in top]
+        if key == getattr(self, "shown", None):
+            return
+        self.shown, self.programs = key, top
+        self.redraw()
+
+    def redraw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        if w < 50:
+            return
+        label_w, value_w = min(230, w * 0.38), 130
+        x0, x1 = label_w, max(label_w + 40, w - value_w)
+        for i, program in enumerate(self.programs):
+            y = i * self.ROW_H + self.ROW_H / 2 + 2
+            name = self.SHORT.get(program.name, program.name)
+            yours = program.yours and not name.startswith("Windows")
+            self.create_text(0, y, text=name[:32], anchor="w", font=(theme.FONT, 9),
+                             fill=theme.TEXT if yours else theme.MUTED)
+            self.create_rectangle(x0, y - 4, x1, y + 4, fill=theme.RAISED, width=0)
+            share = max(0.0, min(1.0, program.cpu / 100))
+            colour = theme.LASER if yours else theme.METAL
+            if share > 0:
+                self.create_rectangle(x0, y - 4, x0 + max(2, (x1 - x0) * share), y + 4, fill=colour, width=0)
+            self.create_text(w, y, text=f"{program.cpu:4.0f}% CPU  {gb(program.memory_mb):>7}", anchor="e",
+                             font=(theme.MONO, 9), fill=theme.TEXT if yours else theme.MUTED)

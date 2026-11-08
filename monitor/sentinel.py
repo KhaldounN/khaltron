@@ -56,7 +56,7 @@ class SentinelHeader(tk.Canvas):
         self.grid_image = ImageTk.PhotoImage(grid)
         self.create_image(0, 0, image=self.grid_image, anchor="nw")
         # the laser line (below the text, so the name stays readable) and the dot where it lands
-        self.ray = self.create_line(0, 0, 0, 0, fill=theme.LASER, width=1)
+        self.ray = self.create_line(0, 0, 0, 0, fill=theme.mix(theme.PANEL, theme.LASER, 0.45), width=1, dash=(6, 3))
         self.dot = self.create_oval(0, 0, 0, 0, fill=theme.LASER_HOT, outline="")
         # the scan line rolls inside the drone's target frame only (full width, it repainted the whole header)
         self.scanline = self.create_line(EYE_X - 44, 0, EYE_X + 44, 0, fill=theme.mix(theme.PANEL, theme.LASER, 0.4))
