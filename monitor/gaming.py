@@ -30,7 +30,7 @@ from .config import BOOK, CONFIG, STATE
 from .sources.processes import KNOWN
 from .util import NO_WINDOW, read_json, write_json
 
-FLAG = Path.home() / ".claude" / "gaming.json"
+FLAG = Path(CONFIG.get("gaming_flag", str(STATE / "gaming.json"))).expanduser()  # exists = gaming mode on
 LOCK = STATE / "gaming.lock"
 JOB_NEEDLES = [needle for needle, _, protected in KNOWN if not protected]  # analyzer.worker, second_stage, ...
 NEVER = [needle for needle, _, protected in KNOWN if protected]          # website, monitor, runner, voice

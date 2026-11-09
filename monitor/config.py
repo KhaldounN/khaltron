@@ -1,4 +1,7 @@
-"""Settings: defaults here, overridden by config.json in the project folder (only the keys you put there)."""
+"""Settings: defaults here, overridden by config.json in the project folder (only the keys you put there).
+
+The defaults work on any Windows PC. config.json is your own (it is not in the repository), for example:
+    {"scheduled_tasks": ["Khaltron 9000", "My nightly backup"], "low_memory_mb": 2000}"""
 
 import json
 from pathlib import Path
@@ -7,13 +10,18 @@ HOME = Path(__file__).resolve().parent.parent  # the "job monitor" folder
 STATE = HOME / "state"  # planned.json, history, logs of planned jobs, runner lock
 
 DEFAULTS = {
+    # the Book Analyzer project, if you have it (its views switch themselves off when the folder isn't there)
     "book_analyzer": str(HOME.parent / "book analyzer v2"),
     "refresh_seconds": 2,           # how often the window re-reads everything
     "slow_refresh_seconds": 60,     # scheduled tasks and the library count (slower to read)
     "low_memory_mb": 1500,          # below this the memory bar turns red and a warning pops up (stage 2's own limit)
     "heavy_process_mb": 300,        # a python process using more memory than this is listed
     "heavy_process_cpu": 20,        # ... or more CPU (percent of one core) than this
-    "scheduled_tasks": ["Book Analyzer website", "Book Visualizer library (3 am)", "Khaltron 9000"],
+    "scheduled_tasks": ["Khaltron 9000"],  # Windows scheduled tasks to show (add your own)
+    # processes to recognise, as [text in the command line, name to show, protected (never stopped or frozen)]
+    "known_processes": [],
+    # gaming mode's switch file: while it exists, gaming mode is on (other tools can check it)
+    "gaming_flag": str(STATE / "gaming.json"),
     # gaming mode also freezes these background apps (process name -> what the window calls it), and any other
     # Python script of yours holding more RAM than gaming_python_mb; only things that are safe to freeze
     "gaming_also_freeze": {"OneDrive.exe": "OneDrive sync"},
@@ -37,4 +45,5 @@ def load() -> dict:
 
 
 CONFIG = load()
-BOOK = Path(CONFIG["book_analyzer"])
+BOOK = Path(CONFIG["book_analyzer"]).expanduser()
+HAS_BOOK = (BOOK / "analyzer").exists()  # the Book Analyzer integration is on only when that project is there

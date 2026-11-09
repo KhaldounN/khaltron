@@ -13,7 +13,7 @@ from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
 from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
 from .collect import State, collect
-from .config import BOOK, CONFIG
+from .config import BOOK, CONFIG, HAS_BOOK
 from .model import DONE, FAILED, RUNNING, STOPPED, WAITING, Job
 from .util import duration, read_json, when
 
@@ -193,14 +193,15 @@ class App:
         start = ttk.Menubutton(top, text="Start / control")
         menu = tk.Menu(start, tearoff=False)
         menu.add_command(label="Add a job to the planned queue...", command=self.add_dialog)
-        menu.add_separator()
-        menu.add_command(label="Start the library pre-analysis", command=lambda: self.global_action(
-            "Start the library pre-analysis?\n\nIt analyzes every library book without a saved result, shortest "
-            "first, in the background (books already done are skipped).", actions.start_library))
-        menu.add_command(label="Resume stage 2", command=lambda: self.global_action(
-            actions.question(Job("", "", "", ""), "resume2"), actions.resume_stage2))
-        menu.add_command(label="Pause stage 2", command=lambda: self.global_action(
-            actions.question(Job("", "", "", ""), "pause2"), actions.pause_stage2))
+        if HAS_BOOK:  # the Book Analyzer's own jobs
+            menu.add_separator()
+            menu.add_command(label="Start the library pre-analysis", command=lambda: self.global_action(
+                "Start the library pre-analysis?\n\nIt analyzes every library book without a saved result, shortest "
+                "first, in the background (books already done are skipped).", actions.start_library))
+            menu.add_command(label="Resume stage 2", command=lambda: self.global_action(
+                actions.question(Job("", "", "", ""), "resume2"), actions.resume_stage2))
+            menu.add_command(label="Pause stage 2", command=lambda: self.global_action(
+                actions.question(Job("", "", "", ""), "pause2"), actions.pause_stage2))
         menu.add_separator()
         menu.add_command(label="Pause the planned queue", command=lambda: self.global_action(
             "Pause the planned queue?\n\nJobs already running go on; no new planned job starts until you resume.",
@@ -210,7 +211,9 @@ class App:
         menu.add_separator()
         menu.add_command(label="Gaming mode on / off (Ctrl+Alt+G)", command=self.toggle_gaming)
         menu.add_separator()
-        menu.add_command(label="Open the Book Analyzer results folder", command=lambda: self.open_path(BOOK / "results"))
+        if HAS_BOOK:
+            menu.add_command(label="Open the Book Analyzer results folder",
+                             command=lambda: self.open_path(BOOK / "results"))
         menu.add_command(label="Refresh now", command=self.wake.set)
         start["menu"] = menu
         start.pack(side="right")

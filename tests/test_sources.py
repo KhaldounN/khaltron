@@ -56,8 +56,14 @@ def test_library_job_counts_ready_books_and_lists_the_next(tmp_path, monkeypatch
 
 
 def test_known_processes_and_protection_labels():
-    assert label_for("pythonw.exe C:/x/tts/piper_server.py") == ("Voice server (read-aloud)", True, True)
-    assert label_for("python -m streamlit run app/streamlit_app.py")[2] is True
+    """Khaltron's own processes are protected everywhere; the owner's voice server and Book Analyzer website only
+    on a PC that has them (anyone else's Streamlit app is just a process)."""
+    from monitor.config import HAS_BOOK
+    from monitor.sources import processes
+    assert label_for("pythonw.exe monitor.pyw --tray") == ("Khaltron 9000 (this window)", True, True)
+    voice = any(needle == "piper_server" for needle, _, _ in processes.KNOWN)
+    assert label_for("pythonw.exe C:/x/tts/piper_server.py")[2] is voice
+    assert label_for("python -m streamlit run app/streamlit_app.py")[2] is HAS_BOOK
     assert label_for("python -m analyzer.worker book.txt r.pkl s.json") == ("Book analysis worker", True, False)
     assert label_for("python something_else.py") == ("", False, False)
 

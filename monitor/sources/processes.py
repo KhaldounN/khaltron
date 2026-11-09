@@ -7,16 +7,20 @@ from dataclasses import dataclass
 
 import psutil
 
-from ..config import CONFIG
+from pathlib import Path
+
+from ..config import CONFIG, HAS_BOOK
 from ..model import RUNNING, Job
 
 # what a command line contains -> (label, protected). Protected ones never get a Stop button (protect.py).
 KNOWN = [
-    ("piper_server", "Voice server (read-aloud)", True),
-    ("streamlit", "Book Analyzer website", True),
-    ("run_website.ps1", "Website watchdog", True),
     ("monitor.pyw", "Khaltron 9000 (this window)", True),
     ("monitor.runner", "Khaltron 9000 queue runner", True),
+] + ([("piper_server", "Voice server (read-aloud)", True)]          # the owner's read-aloud voice, if present
+     if (Path.home() / ".claude" / "tts" / "piper_server.py").exists() else []) + (
+    [("streamlit", "Book Analyzer website", True), ("run_website.ps1", "Website watchdog", True)]
+    if HAS_BOOK else []) + [tuple(entry) for entry in CONFIG.get("known_processes", [])] + [
+    # the Book Analyzer's job scripts (they only match those command lines)
     ("analyzer.worker", "Book analysis worker", False),
     ("analyzer.second_stage", "Stage 2 worker (deeper analysis)", False),
     ("analyze_library", "Library pre-analysis", False),

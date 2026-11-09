@@ -1,0 +1,6 @@
+# Khaltron 9000 (Windows 10/11, Python 3.11+ with tkinter). install.ps1 installs these into .venv.
+psutil>=5.9
+pystray>=0.19
+pillow>=10.0
+# for the tests only
+pytest>=7.0

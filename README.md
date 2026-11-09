@@ -68,15 +68,22 @@ cd khaltron
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-`install.ps1` makes a Python environment (`.venv`) with the four packages it needs (`psutil`, `pystray`, `pillow`,
-`pytest`), a desktop shortcut **Khaltron 9000** (hotkey **Ctrl+Alt+J**), and a logon task that starts it in the tray.
-Prefer to do it by hand?
+`install.ps1` checks for Python 3.11+ (and tells you where to get it if it's missing), makes a Python environment
+(`.venv`) with the packages in `requirements.txt`, and adds:
+- a desktop shortcut **Khaltron 9000** (hotkey **Ctrl+Alt+J**),
+- a desktop shortcut **Khaltron Gaming Mode** (hotkey **Ctrl+Alt+G**, switches gaming mode on and off),
+- a task that starts Khaltron in the tray when you log in (your user only).
+
+Add `-NoStartup` to skip the logon task, or `-NoShortcuts` to skip the shortcuts. Prefer to do it by hand?
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install psutil pystray pillow pytest
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\pythonw.exe monitor.pyw
 ```
+
+Nothing else is changed on your PC: the fonts are loaded only while Khaltron runs, and the only registry entry is
+Khaltron's name and icon for its notifications (your user only).
 
 ## Queue jobs with `jobq`
 
@@ -110,27 +117,43 @@ $job = & .\jobq.ps1 begin --name "Nightly export"      # it shows as running (it
 
 `gaming.ps1 on | off | toggle | status`, or Ctrl+Alt+G, the tray menu, or *Start / control* in the window.
 **On** pauses the planned queue, freezes (suspends) every running background job and asks Windows to move its memory
-aside, stops the read-aloud voice server and sets the Windows power mode to Best performance. What it changed is
-written to `~/.claude/gaming.json` (the file existing *is* the switch). **Off** undoes exactly that, and frozen jobs
+aside, also freezes any other heavy Python script of yours and OneDrive's syncing, plays a short sound, and sets the
+Windows power mode to Best performance. What it changed is
+written to `state\gaming.json` (the file existing *is* the switch; other tools can check it, and the
+`gaming_flag` setting moves it). **Off** undoes exactly that, and frozen jobs
 carry on where they were. While it is on, a job that starts anyway is frozen too. Protected processes are never
 frozen. Every switch is logged in `state\gaming.log`.
 
 ## Make it watch your own jobs
 
-Khaltron was built to watch the jobs of one project (a book-analysis website). That project's readers sit in
-`monitor\sources\` (`book_main.py`, `book_stage2.py`, `book_library.py`), and they switch themselves off when that
-project isn't there. Without them you still get the queue, the Python processes, scheduled tasks and the PC's health.
+Out of the box Khaltron shows every program on your PC, your Python processes, the planned queue (`jobq`), scheduled
+tasks and the PC's health, and gaming mode freezes your heavy Python scripts. Two ways to show your own jobs too:
 
-To watch something of your own, add a reader to `monitor\sources\` that returns `Job` rows (see `monitor\model.py`)
-and call it from `monitor\collect.py`. A reader only *reads* (status files, logs, processes), so the window stays quick.
+- **Queue them with `jobq`** (above): no code. They show as running / waiting / done, with their log.
+- **Add a reader** for jobs that already write a status file or log: a small file in `monitor\sources\` that returns
+  `Job` rows (see `monitor\model.py`), called from `monitor\collect.py`. A reader only *reads*, so the window stays
+  quick. `book_main.py`, `book_stage2.py` and `book_library.py` are examples: they read the author's book-analysis
+  project and switch themselves off when that project isn't there.
 
-Settings go in a `config.json` next to `monitor.pyw`; any key of `DEFAULTS` in `monitor\config.py` can be changed:
+### Settings
+
+Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repository). Any key of `DEFAULTS` in
+`monitor\config.py` can be changed, for example:
 
 ```json
-{ "low_memory_mb": 2000, "scheduled_tasks": ["My nightly task"], "refresh_seconds": 3 }
+{
+  "scheduled_tasks": ["Khaltron 9000", "My nightly backup"],
+  "known_processes": [["train.py", "Model training", false], ["my_server.py", "My server", true]],
+  "low_memory_mb": 2000,
+  "gaming_also_freeze": {"OneDrive.exe": "OneDrive sync", "Dropbox.exe": "Dropbox sync"},
+  "gaming_python_mb": 300,
+  "gaming_sound_volume": 0.5
+}
 ```
 
-Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\processes.py` (the `True` ones).
+- `known_processes`: give your own processes a name in the window; `true` = protected (never stopped or frozen).
+- `gaming_also_freeze`: background apps that are safe to freeze while you play (never your game, browser or chat).
+- `gaming_sound`: `false` for a silent gaming mode.
 
 ## How it is built
 
