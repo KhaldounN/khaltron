@@ -46,9 +46,12 @@ def main():
     port = CONFIG["port"]
     if already_running(port):
         return
+    from monitor import identity
     from monitor.tray import Tray, icon_image
     from monitor.ui import App
     from PIL import ImageTk
+
+    identity.claim()  # notifications say "Khaltron 9000" with the raccoon, not "Python"
 
     root = tk.Tk()
     holder = {}

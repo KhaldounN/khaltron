@@ -170,3 +170,28 @@ def test_other_heavy_python_scripts_are_frozen_too_but_small_ones_are_not(game, 
         assert state_of(script) != psutil.STATUS_STOPPED
     finally:
         script.kill()
+
+
+def test_the_book_analyzer_website_is_paused_while_gaming_and_resumed_after(game, monkeypatch):
+    """The owner's choice: the website pauses during games (frozen, so its watchdog doesn't restart it)."""
+    site = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "-m", "streamlit", "run",
+                             r"C:\x\book analyzer v2\app\streamlit_app.py"])
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "streamlit", "run", "other_app.py"])
+    try:
+        deadline = time.time() + 15
+        while time.time() < deadline and not all(
+                "streamlit" in " ".join(psutil.Process(p.pid).cmdline()) for p in (site, other)):
+            time.sleep(0.1)
+        monkeypatch.setitem(gaming.CONFIG, "gaming_pause_website", False)
+        gaming.turn_on()
+        assert state_of(site) != psutil.STATUS_STOPPED  # the setting is off: left alone
+        gaming.turn_off()
+        monkeypatch.setitem(gaming.CONFIG, "gaming_pause_website", True)
+        message = gaming.turn_on()
+        assert state_of(site) == psutil.STATUS_STOPPED and "Book Analyzer website" in message
+        assert state_of(other) != psutil.STATUS_STOPPED  # another Streamlit app: never
+        gaming.turn_off()
+        assert state_of(site) != psutil.STATUS_STOPPED  # carries on
+    finally:
+        site.kill()
+        other.kill()

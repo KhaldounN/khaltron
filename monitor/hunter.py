@@ -39,6 +39,11 @@ from . import theme
 from .config import HOME
 
 NATIVE_W, NATIVE_H = 1600, 320
+# The stage is wider than the design (the owner asked for a shorter header): the design's 1600-wide scene sits in
+# the middle and the dark background and the ledge simply continue to the sides. At the same window width the
+# header is 1600/1850 = 86% as tall, and nothing in the artwork is cut.
+VIEW_W = 1850
+OFFSET = (VIEW_W - NATIVE_W) / 2  # the design's x + OFFSET = the stage's x
 CYAN, RED = "#35E0FF", "#FF3B3B"
 EYES = [(765, 115), (834, 112)]
 CAM = (799, 114)          # the push-in's origin
@@ -92,9 +97,9 @@ def _native_scene(hunt: bool) -> Image.Image:
         if hunt in _native:
             return _native[hunt]
         # the dark background: radial-gradient(ellipse at 50% 30%, #15181D 0%, #07080A 70%)
-        radial = Image.radial_gradient("L").resize((int(NATIVE_W * 1.4), int(NATIVE_H * 2.2)))
-        left, top = int(NATIVE_W * .5 - radial.width / 2), int(NATIVE_H * .3 - radial.height / 2)
-        mask = Image.new("L", (NATIVE_W, NATIVE_H), 255)
+        radial = Image.radial_gradient("L").resize((int(VIEW_W * 1.4), int(NATIVE_H * 2.2)))
+        left, top = int(VIEW_W * .5 - radial.width / 2), int(NATIVE_H * .3 - radial.height / 2)
+        mask = Image.new("L", (VIEW_W, NATIVE_H), 255)
         mask.paste(radial.point(lambda v: min(255, int(v / .70))), (left, top))
         img = Image.composite(Image.new("RGB", mask.size, "#07080A"), Image.new("RGB", mask.size, "#15181D"), mask)
         # the steel ledge band across the full width: linear-gradient(#4A4D52 0, #2C2E32 3px, #1F2125 40%, #141518)
@@ -107,7 +112,7 @@ def _native_scene(hunt: bool) -> Image.Image:
                 c = theme.mix("#2C2E32", "#1F2125", (d - 3) / (57 * .4 - 3))
             else:
                 c = theme.mix("#1F2125", "#141518", (d - 57 * .4) / (57 * .6))
-            ledge.line([(0, y), (NATIVE_W, y)], fill=c)
+            ledge.line([(0, y), (VIEW_W, y)], fill=c)
         # the artwork: 960 x 320 at x 320, its outer 14% on each side faded into the background
         if ART.exists():
             art = Image.open(ART).convert("RGB").resize((960, 320), Image.LANCZOS)
@@ -115,12 +120,12 @@ def _native_scene(hunt: bool) -> Image.Image:
             for x in range(960):
                 t = x / 959
                 fade.putpixel((x, 0), int(255 * min(1, t / .14, (1 - t) / .14)))
-            img.paste(art, (320, 0), fade.resize((960, 320)))
+            img.paste(art, (int(320 + OFFSET), 0), fade.resize((960, 320)))
         if hunt:
             # the camera pushes in 6% toward the eyes (the cards and brand stay put; they are drawn live)
-            z, (cx, cy) = 1.06, CAM
-            box = (cx - cx / z, cy - cy / z, cx + (NATIVE_W - cx) / z, cy + (NATIVE_H - cy) / z)
-            img = img.resize((NATIVE_W, NATIVE_H), Image.LANCZOS, box=box)
+            z, (cx, cy) = 1.06, (CAM[0] + OFFSET, CAM[1])
+            box = (cx - cx / z, cy - cy / z, cx + (VIEW_W - cx) / z, cy + (NATIVE_H - cy) / z)
+            img = img.resize((VIEW_W, NATIVE_H), Image.LANCZOS, box=box)
             # colour grade #FF2A2A at .38 (CSS mix-blend-mode: color keeps the brightness, takes the hue)
             grey = img.convert("L")
             red = Image.merge("RGB", (grey.point(lambda v: min(255, int(v * 1.55))), grey.point(lambda v: int(v * .32)),
@@ -129,7 +134,7 @@ def _native_scene(hunt: bool) -> Image.Image:
             img = ImageEnhance.Brightness(img).enhance(.7)  # the 30% darkening
             # the red vignette: inset 0 0 130px rgba(255,30,30,.45)
             edge = Image.new("L", img.size, 0)
-            ImageDraw.Draw(edge).rectangle((0, 0, NATIVE_W - 1, NATIVE_H - 1), outline=255, width=60)
+            ImageDraw.Draw(edge).rectangle((0, 0, VIEW_W - 1, NATIVE_H - 1), outline=255, width=60)
             edge = edge.filter(ImageFilter.GaussianBlur(55)).point(lambda v: int(v * .45))
             img = Image.composite(Image.new("RGB", img.size, (255, 30, 30)), img, edge)
         # film grain (.12, overlay)
@@ -142,7 +147,7 @@ def _native_scene(hunt: bool) -> Image.Image:
 def scene(width: int, hunt: bool) -> Image.Image:
     key = (width, hunt)
     if key not in _scaled:
-        height = round(width * NATIVE_H / NATIVE_W)
+        height = round(width * NATIVE_H / VIEW_W)
         _scaled[key] = _native_scene(hunt).resize((width, height), Image.LANCZOS)
         if len(_scaled) > 6:
             _scaled.pop(next(iter(_scaled)))
@@ -192,16 +197,21 @@ class KhaltronHeader(tk.Canvas):
     # --- geometry: the design's coordinates, scaled to the width ---------------------------------------------------
     @property
     def S(self) -> float:
-        return self.width / NATIVE_W
+        return self.width / VIEW_W
 
     def P(self, x, y):
+        """A point of the stage (edges: the brand, the button) on screen."""
         return x * self.S, y * self.S
+
+    def D(self, x, y):
+        """A point of the design's scene (the robot, its eyes, the cards) on screen: centred on the stage."""
+        return self.P(x + OFFSET, y)
 
     def cam(self, x, y):
         """Where a point of the robot shows: in gaming mode the camera is pushed in 6% around CAM."""
         if self.hunt:
             x, y = CAM[0] + (x - CAM[0]) * 1.06, CAM[1] + (y - CAM[1]) * 1.06
-        return self.P(x, y)
+        return self.D(x, y)
 
     @property
     def accent(self) -> str:
@@ -210,7 +220,7 @@ class KhaltronHeader(tk.Canvas):
     def _resized(self, event):
         if event.width != self.width and event.width > 50:
             self.width = event.width
-            self.configure(height=round(event.width * NATIVE_H / NATIVE_W))
+            self.configure(height=round(event.width * NATIVE_H / VIEW_W))
             self.build()
             other = (event.width, not self.hunt)
             threading.Thread(target=lambda: scene(*other), daemon=True).start()  # the other mode, ready to switch
@@ -249,7 +259,7 @@ class KhaltronHeader(tk.Canvas):
         self.beams_ready = False
         # dust motes drifting up
         rng = random.Random(11)
-        self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(40, 1560), rng.uniform(90, 250),
+        self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(40, VIEW_W - 40), rng.uniform(90, 250),
                        rng.uniform(0, 10), rng.uniform(8, 13)) for _ in range(14)]
         # the cards
         self.card_items = []
@@ -260,7 +270,7 @@ class KhaltronHeader(tk.Canvas):
         badge_font = tkfont.Font(family=theme.MONO, size=-max(8, round(10 * S)), weight="bold")
         self.fonts = {"name": name_font, "tag": tag_font, "badge": badge_font}
         for slot in SLOTS:
-            x0, y0 = self.P(slot, CARD_TOP)
+            x0, y0 = self.D(slot, CARD_TOP)
             w, h = CARD_W * S, CARD_H * S
             pad = 10 * S
             items = {"x0": x0, "y0": y0, "w": w, "h": h, "dy": 0.0}
@@ -622,7 +632,7 @@ class KhaltronHeader(tk.Canvas):
             theta = math.radians(g["angle"])
             flicker = self.hunt and not locked and int(t * 1000 / 120) % 2
             for beam, laser, (bx, by) in zip(self.beams, self.lasers, EYES):
-                ox, oy = self.P(bx, by)
+                ox, oy = self.D(bx, by)
 
                 def rot(px, py, ox=ox, oy=oy, bx=bx, by=by):
                     vx, vy = px - bx, py - by

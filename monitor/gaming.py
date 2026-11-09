@@ -99,6 +99,15 @@ EXTRA_APPS = {name.lower(): label for name, label in
               CONFIG.get("gaming_also_freeze", {"OneDrive.exe": "OneDrive sync"}).items()}
 
 
+def website(cmdline: str) -> bool:
+    """The Book Analyzer website (streamlit), paused while gaming when config "gaming_pause_website" is on (the
+    owner's choice, 2026-11-09). Frozen, not stopped: its watchdog (run_website.ps1) only restarts it when it
+    EXITS, so it simply keeps waiting, and the site carries on the moment gaming mode ends. The phone address
+    doesn't answer meanwhile. Only the Book Analyzer's own site, never another Streamlit app."""
+    return (bool(CONFIG.get("gaming_pause_website", True)) and "streamlit" in cmdline
+            and "book analyzer" in cmdline.lower())
+
+
 def _job_processes() -> list[psutil.Process]:
     """Every process gaming mode freezes: known job scripts, whatever planned jobs are running (and their
     children), and the safe extras (_extras)."""
@@ -111,6 +120,9 @@ def _job_processes() -> list[psutil.Process]:
         if not name.startswith(("python", "powershell", "pwsh")):
             continue
         cmdline = _cmdline(process)
+        if website(cmdline):
+            found[process.pid] = process
+            continue
         if any(n in cmdline for n in NEVER):
             continue
         if any(needle in cmdline for needle in JOB_NEEDLES) or _extras(process, name, cmdline):

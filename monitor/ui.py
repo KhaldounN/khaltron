@@ -214,11 +214,12 @@ class App:
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
+        # the one-sentence briefing shares this row (one row less under the header)
+        self.briefing = Briefing(top, compact=True)
+        self.briefing.pack(side="left", fill="x", expand=True, padx=(14, 8))
         self.gaming_switch = self.header  # the header's toggle pill is the gaming mode switch
 
         # the one-sentence briefing, and warnings under it
-        self.briefing = Briefing(outer)
-        self.briefing.pack(fill="x", pady=(12, 0))
         self.flags = ttk.Label(outer, text="", style="Flag.TLabel")
         self.flags.pack(fill="x", pady=(4, 0))
 
@@ -468,7 +469,10 @@ class App:
                 self.wake.set()
             lines = message.splitlines()
             frozen = [line for line in lines if line.startswith("- Frozen:")]
-            body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+            if lines[0].startswith("Gaming mode ON") and not frozen:
+                body = "Nothing to pause: no background jobs are running. Your apps and Windows are left alone."
+            else:
+                body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
             self.results.put(("notify", (lines[0], body)))
             return lines[0] + "  " + lines[-1]
         self.run_in_background(do)
@@ -488,7 +492,10 @@ class App:
                 self.wake.set()
             lines = message.splitlines()
             frozen = [line for line in lines if line.startswith("- Frozen:")]
-            body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+            if lines[0].startswith("Gaming mode ON") and not frozen:
+                body = "Nothing to pause: no background jobs are running. Your apps and Windows are left alone."
+            else:
+                body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
             self.results.put(("notify", (lines[0], body)))
             return lines[0] + "  " + lines[-1]
         self.run_in_background(do)

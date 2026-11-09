@@ -18,6 +18,8 @@ DEFAULTS = {
     # Python script of yours holding more RAM than gaming_python_mb; only things that are safe to freeze
     "gaming_also_freeze": {"OneDrive.exe": "OneDrive sync"},
     "gaming_python_mb": 200,
+    # gaming mode also pauses (freezes) the Book Analyzer website; it carries on when gaming mode ends
+    "gaming_pause_website": True,
     "port": 59126,                  # a second launch tells the first window to show itself through this port
 }
 

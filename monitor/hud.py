@@ -318,11 +318,14 @@ class Briefing(tk.Frame):
     """The one-sentence summary at the top: a status chip (CALM, WORKING, BUSY, LOW MEMORY, GAMING) and what is
     going on in plain words, with a machine-style prompt above it."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, compact: bool = False):
+        """compact: one line, no "> SYSTEM BRIEFING" label (it shares the toolbar's row)."""
         super().__init__(parent, bg=theme.BG)
-        tk.Label(self, text="> SYSTEM BRIEFING", font=(theme.MONO, 8), fg=theme.LASER_DARK, bg=theme.BG).pack(anchor="w")
+        if not compact:
+            tk.Label(self, text="> SYSTEM BRIEFING", font=(theme.MONO, 8), fg=theme.LASER_DARK,
+                     bg=theme.BG).pack(anchor="w")
         row = tk.Frame(self, bg=theme.BG)
-        row.pack(fill="x", pady=(2, 0))
+        row.pack(fill="x", pady=(0 if compact else 2, 0))
         self.chip = tk.Label(row, font=(theme.FONT, 9, "bold"), padx=10, pady=2)
         self.chip.pack(side="left")
         self.sentence = tk.Label(row, font=(theme.FONT, 10), fg=theme.TEXT, bg=theme.BG, anchor="w", justify="left")
@@ -335,7 +338,7 @@ class Briefing(tk.Frame):
         self.shown = (chip, colour, sentence)
         self.chip.configure(text=chip, bg=colour, fg=theme.BG)
         self.sentence.configure(text=sentence)
-        self.sentence.configure(wraplength=max(300, self.winfo_width() - 160))
+        self.sentence.configure(wraplength=max(240, self.winfo_width() - 110))
 
 
 class NextList(tk.Frame):
