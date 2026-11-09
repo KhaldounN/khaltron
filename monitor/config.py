@@ -23,8 +23,18 @@ DEFAULTS = {
     # gaming mode's switch file: while it exists, gaming mode is on (other tools can check it)
     "gaming_flag": str(STATE / "gaming.json"),
     # gaming mode also freezes these background apps (process name -> what the window calls it), and any other
-    # Python script of yours holding more RAM than gaming_python_mb; only things that are safe to freeze
-    "gaming_also_freeze": {"OneDrive.exe": "OneDrive sync"},
+    # Python script of yours holding more RAM than gaming_python_mb. Only apps that run unseen and simply carry on
+    # afterwards: never a game, launcher, overlay, browser, chat, Claude, antivirus, audio or network. Apps that
+    # aren't installed are ignored. Your config.json ADDS to this list; give a name null to take it off.
+    "gaming_also_freeze": {
+        "OneDrive.exe": "OneDrive sync", "OneDrive.Sync.Service.exe": "OneDrive sync",
+        "Dropbox.exe": "Dropbox sync", "GoogleDriveFS.exe": "Google Drive sync", "iCloudDrive.exe": "iCloud sync",
+        "AdobeCollabSync.exe": "Adobe Acrobat sync", "CCXProcess.exe": "Adobe Creative Cloud",
+        "WidgetBoard.exe": "Windows Widgets", "WidgetService.exe": "Windows Widgets",
+        "MicrosoftStartFeedProvider.exe": "Windows Widgets (news feed)",
+        "CrossDeviceService.exe": "Phone Link", "CrossDeviceResume.exe": "Phone Link",
+        "PhoneExperienceHost.exe": "Phone Link",
+    },
     "gaming_python_mb": 200,
     # gaming mode also pauses (freezes) the Book Analyzer website; it carries on when gaming mode ends
     "gaming_pause_website": True,
@@ -38,7 +48,10 @@ DEFAULTS = {
 def load() -> dict:
     found = dict(DEFAULTS)
     try:
-        found.update(json.loads((HOME / "config.json").read_text(encoding="utf-8")))
+        for key, value in json.loads((HOME / "config.json").read_text(encoding="utf-8")).items():
+            if isinstance(value, dict) and isinstance(found.get(key), dict):  # a list of apps: add to it
+                value = {k: v for k, v in {**found[key], **value}.items() if v is not None}
+            found[key] = value
     except (OSError, ValueError):
         pass
     return found

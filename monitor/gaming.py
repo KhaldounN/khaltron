@@ -96,7 +96,7 @@ def _extras(process: psutil.Process, name: str, cmdline: str) -> str | None:
 
 
 EXTRA_APPS = {name.lower(): label for name, label in
-              CONFIG.get("gaming_also_freeze", {"OneDrive.exe": "OneDrive sync"}).items()}
+              CONFIG.get("gaming_also_freeze", {}).items() if label}
 
 
 def website(cmdline: str) -> bool:

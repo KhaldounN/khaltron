@@ -33,6 +33,15 @@ FRIENDLY = {
     "msmpeng.exe": "Microsoft Defender", "tailscaled.exe": "Tailscale", "tailscale-ipn.exe": "Tailscale",
     "searchhost.exe": "Windows Search", "searchindexer.exe": "Windows Search", "dwm.exe": "Windows (desktop)",
     "memory compression": "Windows (memory compression)", "system": "Windows (kernel)",
+    "onedrive.sync.service.exe": "OneDrive", "adobecollabsync.exe": "Adobe Acrobat sync",
+    "widgetboard.exe": "Windows Widgets", "widgetservice.exe": "Windows Widgets",
+    "microsoftstartfeedprovider.exe": "Windows Widgets", "crossdeviceservice.exe": "Phone Link",
+    "crossdeviceresume.exe": "Phone Link", "phoneexperiencehost.exe": "Phone Link",
+    "plex media server.exe": "Plex Media Server", "plexscripthost.exe": "Plex Media Server",
+    "plex tuner service.exe": "Plex Media Server", "psexpresscore.exe": "Photoshop Express",
+    "psexpressbroker.exe": "Photoshop Express", "systemoptimizer.exe": "HP System Optimizer",
+    "overwolf.exe": "Overwolf", "overwolfbrowser.exe": "Overwolf", "overwolfhelper.exe": "Overwolf",
+    "overwolfhelper64.exe": "Overwolf", "whatsapp.root.exe": "WhatsApp", "whatsapp.exe": "WhatsApp",
 }
 SYSTEM_GROUP = "Windows & services"
 

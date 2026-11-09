@@ -117,7 +117,8 @@ $job = & .\jobq.ps1 begin --name "Nightly export"      # it shows as running (it
 
 `gaming.ps1 on | off | toggle | status`, or Ctrl+Alt+G, the tray menu, or *Start / control* in the window.
 **On** pauses the planned queue, freezes (suspends) every running background job and asks Windows to move its memory
-aside, also freezes any other heavy Python script of yours and OneDrive's syncing, plays a short sound, and sets the
+aside, also freezes any other heavy Python script of yours and background apps that are safe to pause (cloud sync such as
+OneDrive, Dropbox and Google Drive, Adobe's sync, Windows Widgets, Phone Link), plays a short sound, and sets the
 Windows power mode to Best performance. What it changed is
 written to `state\gaming.json` (the file existing *is* the switch; other tools can check it, and the
 `gaming_flag` setting moves it). **Off** undoes exactly that, and frozen jobs
@@ -152,7 +153,9 @@ Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repositor
 ```
 
 - `known_processes`: give your own processes a name in the window; `true` = protected (never stopped or frozen).
-- `gaming_also_freeze`: background apps that are safe to freeze while you play (never your game, browser or chat).
+- `gaming_also_freeze`: background apps that are safe to freeze while you play (never your game, launcher, overlay,
+  browser or chat). Yours are *added* to the built-in list; `"WidgetBoard.exe": null` takes one off. Apps that run
+  as administrator can't be frozen.
 - `gaming_sound`: `false` for a silent gaming mode.
 
 ## How it is built

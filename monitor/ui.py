@@ -447,9 +447,9 @@ class App:
         """The cards for gaming mode's sequence: the programs it will really pause (your background jobs and the
         safe background apps), so what the robot locks onto is the truth."""
         from .sources import programs as program_source
-        pausable = {"Python (incl. your background jobs)"} | {
-            program_source.FRIENDLY.get(exe, exe.rsplit(".", 1)[0]) for exe in gaming.EXTRA_APPS}
-        cards = [card_for(a) for a in self.programs if a.name in pausable]
+        pausable = {"python (incl. your background jobs)"} | {
+            program_source.FRIENDLY.get(exe, exe.rsplit(".", 1)[0]).lower() for exe in gaming.EXTRA_APPS}
+        cards = [card_for(a) for a in self.programs if a.name.lower() in pausable]
         for card in cards:
             card.pausable = True
         return cards
