@@ -16,8 +16,8 @@ a{color:#35E0FF}a:hover{color:#9BF0FF}
 .stage{--c:#35E0FF}
 .stage.mode-hunt{--c:#FF3B3B}
 .stage svg *{transition:fill .5s,stroke .5s,opacity .5s,stop-color .5s}
-.tc{fill:var(--c)}.ts{stroke:var(--c)}.sc{stop-color:var(--c)}
-.cam{transform-origin:799px 114px;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.tc{fill:var(--c)}.sc{stop-color:var(--c)}
+.cam{transform-origin:959px 92px;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
 .mode-hunt .cam{transform:scale(1.06)}
 .mode-hunt .shake{animation:shake .18s linear infinite}
 .grade{opacity:0;transition:opacity .8s;mix-blend-mode:color}
@@ -29,31 +29,31 @@ a{color:#35E0FF}a:hover{color:#9BF0FF}
 .redeye{opacity:0;transition:opacity .35s}
 .mode-hunt .redeye{opacity:1}
 .pupil{transition:transform .55s cubic-bezier(.3,.9,.3,1)}
-.lid{opacity:0;transform:translateY(-14px);transition:transform .45s cubic-bezier(.5,0,.2,1),opacity .3s}
+.lid{opacity:0;transform:translateY(-10px);transition:transform .45s cubic-bezier(.5,0,.2,1),opacity .3s}
 .mode-hunt .lid{opacity:1;transform:translateY(0)}
 .beam{transform-box:view-box;transition:transform .55s cubic-bezier(.3,.9,.3,1)}
-.beam.bl{transform-origin:765px 115px}.beam.br{transform-origin:834px 112px}
+.beam.bl{transform-origin:931px 94px}.beam.br{transform-origin:987px 91px}
 .beam-cone{opacity:.45}
 .mode-hunt .beam-cone{opacity:.9;animation:flicker .12s steps(2) infinite}
 .laser{opacity:0}
 .mode-hunt .laser{opacity:1}
-.look-0 .pupil{transform:translate(-2px,1.2px)}.look-0 .beam{transform:rotate(74.5deg)}
-.look-1 .pupil{transform:translate(-1.6px,1.2px)}.look-1 .beam{transform:rotate(70.9deg)}
-.look-2 .pupil{transform:translate(-.8px,1.6px)}.look-2 .beam{transform:rotate(18deg)}
-.look-3 .pupil{transform:translate(.8px,1.6px)}.look-3 .beam{transform:rotate(-22deg)}
-.look-4 .pupil{transform:translate(1.6px,1.2px)}.look-4 .beam{transform:rotate(-70.9deg)}
-.look-5 .pupil{transform:translate(2px,1.2px)}.look-5 .beam{transform:rotate(-74.6deg)}
-.look-c .pupil{transform:translate(0,3px)}.look-c .beam{transform:scaleX(60)}.look-c .laser{opacity:0}
-.card{position:absolute;top:268px;width:120px;height:48px;box-sizing:border-box;padding:6px 10px;border-radius:9px;border:1px solid rgba(53,224,255,.35);background:rgba(6,10,16,.78);backdrop-filter:blur(4px);display:flex;flex-direction:column;gap:4px;transition:border-color .4s,background-color .4s,transform .4s,box-shadow .4s}
+.look-0 .pupil{transform:translate(-2.5px,.6px)}.look-0 .beam{transform:rotate(87deg)}
+.look-1 .pupil{transform:translate(-2.2px,.6px)}.look-1 .beam{transform:rotate(86.3deg)}
+.look-2 .pupil{transform:translate(-2px,.6px)}.look-2 .beam{transform:rotate(85.2deg)}
+.look-3 .pupil{transform:translate(2px,.6px)}.look-3 .beam{transform:rotate(-85.2deg)}
+.look-4 .pupil{transform:translate(2.2px,.6px)}.look-4 .beam{transform:rotate(-86.3deg)}
+.look-5 .pupil{transform:translate(2.5px,.6px)}.look-5 .beam{transform:rotate(-87deg)}
+.look-c .pupil{transform:translate(0,1px)}.look-c .beam.bl{transform:rotate(86deg) scaleX(7)}.look-c .beam.br{transform:rotate(-86deg) scaleX(7)}.look-c .laser{opacity:0}
+.card{position:absolute;top:112px;width:150px;height:50px;box-sizing:border-box;padding:6px 10px;border-radius:8px;border:1px solid rgba(53,224,255,.35);background:rgba(6,10,16,.78);backdrop-filter:blur(4px);display:flex;flex-direction:column;gap:4px;transition:border-color .4s,background-color .4s,transform .4s,box-shadow .4s}
 .mode-hunt .card{border-color:rgba(255,59,59,.5);background:rgba(26,6,8,.82)}
 .card.targeted{border-color:rgba(53,224,255,.85);box-shadow:0 0 22px rgba(53,224,255,.25)}
-.mode-hunt .card.targeted{border-color:#FF3B3B;transform:translateY(-6px);box-shadow:0 0 0 2px rgba(255,59,59,.35),0 0 30px rgba(255,59,59,.5)}
-.card::before,.card::after{content:"";position:absolute;width:12px;height:12px;opacity:0;transition:opacity .3s;border-color:#FF3B3B;border-style:solid}
-.card::before{top:-6px;left:-6px;border-width:2px 0 0 2px}
-.card::after{bottom:-6px;right:-6px;border-width:0 2px 2px 0}
+.mode-hunt .card.targeted{border-color:#FF3B3B;transform:translateY(-4px);box-shadow:0 0 0 2px rgba(255,59,59,.35),0 0 26px rgba(255,59,59,.5)}
+.card::before,.card::after{content:"";position:absolute;width:10px;height:10px;opacity:0;transition:opacity .3s;border-color:#FF3B3B;border-style:solid}
+.card::before{top:-5px;left:-5px;border-width:2px 0 0 2px}
+.card::after{bottom:-5px;right:-5px;border-width:0 2px 2px 0}
 .mode-hunt .card.targeted::before,.mode-hunt .card.targeted::after{opacity:1}
-.c0{left:96px}.c1{left:226px}.c2{left:681px}.c3{left:811px}.c4{left:1254px}.c5{left:1384px}
-.bar{height:4px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden}
+.c0{left:28px}.c1{left:188px}.c2{left:348px}.c3{left:1422px}.c4{left:1582px}.c5{left:1742px}
+.bar{height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
 .fill{height:100%;background:#35E0FF;transition:background-color .4s}
 .mode-hunt .fill{background:#FF3B3B}
 .l1{width:18%}.l2{width:34%}.l3{width:52%}.l4{width:70%}.l5{width:88%}
@@ -76,14 +76,14 @@ a{color:#35E0FF}a:hover{color:#9BF0FF}
 .mode-hunt .toggle{border-color:#FF3B3B;color:#FFD9D9;background:rgba(255,59,59,.18)}
 .mode-hunt .toggle:hover{background:rgba(255,59,59,.3)}
 .toggle:focus-visible{outline:2px solid #fff;outline-offset:3px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);flex:none}
 .mote{fill:var(--c);opacity:0;animation:drift 10s linear infinite}
 .phase-locked .shake,.phase-locked .eyeglow,.phase-locked .vignette,.phase-locked .banner,.phase-locked .beam-cone{animation:none !important}
 .phase-locked .mote{animation-play-state:paused}
 .phase-locked .beam-cone{opacity:.6}
-@keyframes warnflash{0%{box-shadow:0 0 0 2px #FF3B3B,0 0 40px rgba(255,59,59,.85)}100%{box-shadow:0 0 0 0 rgba(255,59,59,0)}}
+@keyframes warnflash{0%{box-shadow:0 0 0 2px #FF3B3B,0 0 36px rgba(255,59,59,.85)}100%{box-shadow:0 0 0 0 rgba(255,59,59,0)}}
 @keyframes pauseflash{0%{background-color:rgba(255,59,59,.45)}100%{background-color:rgba(18,5,7,.9)}}
-@keyframes drift{0%{transform:translate(0,0);opacity:0}20%{opacity:.55}80%{opacity:.45}100%{transform:translate(18px,-70px);opacity:0}}
+@keyframes drift{0%{transform:translate(0,0);opacity:0}20%{opacity:.55}80%{opacity:.45}100%{transform:translate(14px,-50px);opacity:0}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 @keyframes blink{0%{opacity:1}100%{opacity:.25}}
 @keyframes flicker{0%{opacity:1}100%{opacity:.82}}
@@ -91,82 +91,81 @@ a{color:#35E0FF}a:hover{color:#9BF0FF}
 @media (prefers-reduced-motion: reduce){.shake,.eyeglow,.vignette,.banner,.beam-cone,.mote{animation:none !important}}
 </style>
 </helmet>
-<div class="stage {{modeClass}} {{phaseClass}} look-{{look}}" style="position: relative; width: 1600px; height: 320px; overflow: hidden; background-color: #05070A; font-family: 'JetBrains Mono', ui-monospace, monospace; color: #DCE7F0">
+<div class="stage {{modeClass}} {{phaseClass}} look-{{look}}" style="position: relative; width: 1920px; height: 180px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #15181D 0%, #07080A 60%); font-family: 'JetBrains Mono', ui-monospace, monospace; color: #DCE7F0">
 
-<div class="cam" style="position: absolute; left: 0; top: 0; width: 1600px; height: 320px; z-index: 1">
-<div class="shake" style="position: absolute; left: 0; top: 0; width: 1600px; height: 320px; background: radial-gradient(ellipse at 50% 30%, #15181D 0%, #07080A 70%)">
-<div style="position: absolute; left: 0; top: 263px; width: 1600px; height: 57px; background: linear-gradient(180deg, #4A4D52 0px, #2C2E32 3px, #1F2125 40%, #141518 100%)"></div>
-<img src="/_blob/b6812235f2b7c5f339319c6dbc1be9dd" alt="Khaltron 9000, a mechanical raccoon robot with glowing eyes, gripping a steel ledge and looking down" style="position: absolute; left: 320px; top: 0; display: block; width: 960px; height: 320px; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%)">
-<div class="darken" style="position: absolute; left: 0; top: 0; width: 1600px; height: 320px; background: #000"></div>
-<div class="grade" style="position: absolute; left: 0; top: 0; width: 1600px; height: 320px; background: #FF2A2A"></div>
-<svg aria-hidden="true" width="1600" height="320" viewBox="0 0 1600 320" style="position: absolute; left: 0; top: 0">
+<div class="cam" style="position: absolute; left: 0; top: 0; width: 1920px; height: 180px; z-index: 1">
+<div class="shake" style="position: absolute; left: 0; top: 0; width: 1920px; height: 180px">
+<img src="/_blob/b6812235f2b7c5f339319c6dbc1be9dd" alt="Khaltron 9000, a mechanical raccoon robot with glowing eyes, watching the apps below" style="position: absolute; left: 570px; top: 0; display: block; width: 780px; height: 260px; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%)">
+<div class="darken" style="position: absolute; left: 0; top: 0; width: 1920px; height: 180px; background: #000"></div>
+<div class="grade" style="position: absolute; left: 0; top: 0; width: 1920px; height: 180px; background: #FF2A2A"></div>
+<svg aria-hidden="true" width="1920" height="180" viewBox="0 0 1920 180" style="position: absolute; left: 0; top: 0">
 <defs>
-<filter id="eglow" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="6"></feGaussianBlur></filter>
-<filter id="eglow2" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+<filter id="eglow" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="5"></feGaussianBlur></filter>
+<filter id="eglow2" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur in="SourceGraphic" stdDeviation="2" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
 <filter id="lidsoft" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="2"></feGaussianBlur></filter>
 </defs>
-<circle class="eyeglow tc" cx="765" cy="115" r="13" filter="url(#eglow)"></circle>
-<circle class="eyeglow tc" cx="834" cy="112" r="13" filter="url(#eglow)"></circle>
+<circle class="eyeglow tc" cx="931" cy="94" r="10.5" filter="url(#eglow)"></circle>
+<circle class="eyeglow tc" cx="987" cy="91" r="10.5" filter="url(#eglow)"></circle>
 <g class="redeye">
-<circle cx="765" cy="115" r="7" fill="#0A0204"></circle>
-<circle cx="834" cy="112" r="7" fill="#0A0204"></circle>
-<circle cx="765" cy="115" r="5.6" fill="none" stroke="#FF3B3B" stroke-width="1.6" filter="url(#eglow2)"></circle>
-<circle cx="834" cy="112" r="5.6" fill="none" stroke="#FF3B3B" stroke-width="1.6" filter="url(#eglow2)"></circle>
+<circle cx="931" cy="94" r="5.7" fill="#0A0204"></circle>
+<circle cx="987" cy="91" r="5.7" fill="#0A0204"></circle>
+<circle cx="931" cy="94" r="4.5" fill="none" stroke="#FF3B3B" stroke-width="1.4" filter="url(#eglow2)"></circle>
+<circle cx="987" cy="91" r="4.5" fill="none" stroke="#FF3B3B" stroke-width="1.4" filter="url(#eglow2)"></circle>
 </g>
 <g class="pupil">
-<circle class="tc" cx="765" cy="115" r="3.2" filter="url(#eglow2)"></circle>
-<circle class="tc" cx="834" cy="112" r="3.2" filter="url(#eglow2)"></circle>
-<circle cx="765" cy="115" r="1.5" fill="#FFFFFF"></circle>
-<circle cx="834" cy="112" r="1.5" fill="#FFFFFF"></circle>
+<circle class="tc" cx="931" cy="94" r="2.6" filter="url(#eglow2)"></circle>
+<circle class="tc" cx="987" cy="91" r="2.6" filter="url(#eglow2)"></circle>
+<circle cx="931" cy="94" r="1.2" fill="#FFFFFF"></circle>
+<circle cx="987" cy="91" r="1.2" fill="#FFFFFF"></circle>
 </g>
-<polygon class="lid" points="747.4,98.2 783.4,98.2 783.4,113.8 747.4,104.6" fill="#08090B" filter="url(#lidsoft)"></polygon>
-<polygon class="lid" points="816,96 852,96 852,102.4 816,111.2" fill="#08090B" filter="url(#lidsoft)"></polygon>
+<polygon class="lid" points="917,80 946.4,80 946.4,92.6 917,85.2" fill="#08090B" filter="url(#lidsoft)"></polygon>
+<polygon class="lid" points="972.7,78.2 1001.9,78.2 1001.9,83.4 972.7,90.6" fill="#08090B" filter="url(#lidsoft)"></polygon>
 </svg>
 </div>
 </div>
 
-<svg aria-hidden="true" width="1600" height="320" viewBox="0 0 1600 320" style="position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none">
+<svg aria-hidden="true" width="1920" height="180" viewBox="0 0 1920 180" style="position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none">
 <defs>
-<linearGradient id="beamG" gradientUnits="userSpaceOnUse" x1="800" y1="114" x2="800" y2="934">
+<linearGradient id="beamG" gradientUnits="userSpaceOnUse" x1="960" y1="92" x2="960" y2="1092">
 <stop offset="0%" class="sc" stop-opacity=".4"></stop>
 <stop offset="45%" class="sc" stop-opacity=".12"></stop>
 <stop offset="100%" class="sc" stop-opacity="0"></stop>
 </linearGradient>
-<filter id="beamBlur" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="5"></feGaussianBlur></filter>
-<filter id="laserGlow" x="-200%" y="-10%" width="500%" height="120%"><feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+<filter id="beamBlur" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="4"></feGaussianBlur></filter>
+<filter id="laserGlow" x="-200%" y="-10%" width="500%" height="120%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
 </defs>
 <g class="beam bl">
-<polygon class="beam-cone" points="765,119 740,935 790,935" fill="url(#beamG)" filter="url(#beamBlur)"></polygon>
-<line class="laser" x1="765" y1="123" x2="765" y2="920" stroke="#FF6A6A" stroke-width="2" filter="url(#laserGlow)"></line>
+<polygon class="beam-cone" points="931,98 911,1098 951,1098" fill="url(#beamG)" filter="url(#beamBlur)"></polygon>
+<line class="laser" x1="931" y1="102" x2="931" y2="1060" stroke="#FF6A6A" stroke-width="2" filter="url(#laserGlow)"></line>
 </g>
 <g class="beam br">
-<polygon class="beam-cone" points="834,116 809,932 859,932" fill="url(#beamG)" filter="url(#beamBlur)"></polygon>
-<line class="laser" x1="834" y1="120" x2="834" y2="920" stroke="#FF6A6A" stroke-width="2" filter="url(#laserGlow)"></line>
+<polygon class="beam-cone" points="987,95 967,1095 1007,1095" fill="url(#beamG)" filter="url(#beamBlur)"></polygon>
+<line class="laser" x1="987" y1="99" x2="987" y2="1060" stroke="#FF6A6A" stroke-width="2" filter="url(#laserGlow)"></line>
 </g>
 <g>
-<circle class="mote" cx="300" cy="400" r="1.6" style="animation-delay:-1s;animation-duration:11s"></circle>
-<circle class="mote" cx="520" cy="330" r="1.2" style="animation-delay:-4s;animation-duration:9s"></circle>
-<circle class="mote" cx="700" cy="280" r="1.8" style="animation-delay:-7s;animation-duration:12s"></circle>
-<circle class="mote" cx="880" cy="300" r="1.3" style="animation-delay:-2s;animation-duration:10s"></circle>
-<circle class="mote" cx="980" cy="380" r="1.5" style="animation-delay:-5s;animation-duration:13s"></circle>
-<circle class="mote" cx="1180" cy="420" r="1.2" style="animation-delay:-8s;animation-duration:9s"></circle>
-<circle class="mote" cx="200" cy="430" r="1.4" style="animation-delay:-3s;animation-duration:12s"></circle>
-<circle class="mote" cx="1350" cy="400" r="1.6" style="animation-delay:-6s;animation-duration:11s"></circle>
-<circle class="mote" cx="620" cy="420" r="1.3" style="animation-delay:-2.5s;animation-duration:10s"></circle>
-<circle class="mote" cx="920" cy="250" r="1.1" style="animation-delay:-6.5s;animation-duration:9s"></circle>
-<circle class="mote" cx="1480" cy="430" r="1.3" style="animation-delay:-1.5s;animation-duration:11s"></circle>
-<circle class="mote" cx="560" cy="260" r="1" style="animation-delay:-7.5s;animation-duration:10s"></circle>
+<circle class="mote" cx="300" cy="150" r="1.6" style="animation-delay:-1s;animation-duration:11s"></circle>
+<circle class="mote" cx="520" cy="120" r="1.2" style="animation-delay:-4s;animation-duration:9s"></circle>
+<circle class="mote" cx="700" cy="100" r="1.8" style="animation-delay:-7s;animation-duration:12s"></circle>
+<circle class="mote" cx="1240" cy="110" r="1.3" style="animation-delay:-2s;animation-duration:10s"></circle>
+<circle class="mote" cx="1380" cy="140" r="1.5" style="animation-delay:-5s;animation-duration:13s"></circle>
+<circle class="mote" cx="1560" cy="160" r="1.2" style="animation-delay:-8s;animation-duration:9s"></circle>
+<circle class="mote" cx="200" cy="165" r="1.4" style="animation-delay:-3s;animation-duration:12s"></circle>
+<circle class="mote" cx="1700" cy="150" r="1.6" style="animation-delay:-6s;animation-duration:11s"></circle>
+<circle class="mote" cx="620" cy="160" r="1.3" style="animation-delay:-2.5s;animation-duration:10s"></circle>
+<circle class="mote" cx="1100" cy="80" r="1.1" style="animation-delay:-6.5s;animation-duration:9s"></circle>
+<circle class="mote" cx="1840" cy="165" r="1.3" style="animation-delay:-1.5s;animation-duration:11s"></circle>
+<circle class="mote" cx="820" cy="90" r="1" style="animation-delay:-7.5s;animation-duration:10s"></circle>
 </g>
 </svg>
 
-<div style="position: absolute; left: 28px; top: 16px; z-index: 4; display: flex; flex-direction: column; gap: 6px">
-<div style="font-family: Orbitron, sans-serif; font-weight: 800; font-size: 24px; letter-spacing: 0.08em; color: #F2F7FB; text-shadow: 0 2px 12px rgba(0,0,0,.8)">KHALTRON 9000</div>
-<div style="display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: 0.18em; color: #B4C3D1; text-shadow: 0 1px 6px rgba(0,0,0,.9)">
+<div style="position: absolute; left: 28px; top: 16px; z-index: 4; display: flex; flex-direction: column; gap: 5px">
+<div style="font-family: Orbitron, sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.08em; color: #F2F7FB; text-shadow: 0 2px 12px rgba(0,0,0,.8)">KHALTRON 9000</div>
+<div style="display: flex; align-items: center; gap: 9px; font-size: 11px; letter-spacing: 0.18em; color: #B4C3D1; text-shadow: 0 1px 6px rgba(0,0,0,.9)">
 <span class="dot"></span>
 <span>{{modeName}}</span>
 </div>
-<div class="only-hunt banner" style="align-items: center; gap: 10px; max-width: 360px; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: #FF6B6B; text-shadow: 0 1px 6px rgba(0,0,0,.9)">
-<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 21h20L12 3z"></path><path d="M12 10v5"></path><path d="M12 18h.01"></path></svg>
+<div class="only-hunt banner" style="align-items: center; gap: 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: #FF6B6B; text-shadow: 0 1px 6px rgba(0,0,0,.9)">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 21h20L12 3z"></path><path d="M12 10v5"></path><path d="M12 18h.01"></path></svg>
 <span>{{bannerText}}</span>
 </div>
 </div>
@@ -178,7 +177,7 @@ a{color:#35E0FF}a:hover{color:#9BF0FF}
 </button>
 </div>
 
-<div style="position: absolute; left: 0; top: 0; width: 1600px; height: 320px; z-index: 3">
+<div style="position: absolute; left: 0; top: 0; width: 1920px; height: 180px; z-index: 3">
 <sc-for list="{{procs}}" as="p" hint-placeholder-count="6">
 <div class="{{p.cls}}">
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 6px">
@@ -196,19 +195,19 @@ a{color:#35E0FF}a:hover{color:#9BF0FF}
 <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5v14"></path><path d="M15 5v14"></path></svg>
 <span>PAUSED</span>
 </div>
-<div class="lock" style="position: absolute; top: -11px; right: 10px; align-items: center; padding: 3px 9px; border-radius: 999px; background: #FF3B3B; color: #1A0404; font-size: 10px; font-weight: 600; letter-spacing: 0.16em">TERMINATE?</div>
+<div class="lock" style="position: absolute; top: -10px; right: 10px; align-items: center; padding: 2px 8px; border-radius: 999px; background: #FF3B3B; color: #1A0404; font-size: 9px; font-weight: 600; letter-spacing: 0.16em">TERMINATE?</div>
 </div>
 </sc-for>
 </div>
 
-<div class="vignette" style="position: absolute; left: 0; top: 0; width: 1600px; height: 320px; z-index: 5; pointer-events: none; box-shadow: inset 0 0 90px rgba(255,30,30,.45)"></div>
-<svg aria-hidden="true" width="1600" height="320" viewBox="0 0 1600 320" style="position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; opacity: 0.12; mix-blend-mode: overlay">
+<div class="vignette" style="position: absolute; left: 0; top: 0; width: 1920px; height: 180px; z-index: 5; pointer-events: none; box-shadow: inset 0 0 70px rgba(255,30,30,.45)"></div>
+<svg aria-hidden="true" width="1920" height="180" viewBox="0 0 1920 180" style="position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; opacity: 0.12; mix-blend-mode: overlay">
 <filter id="film"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"></feTurbulence><feColorMatrix type="saturate" values="0"></feColorMatrix></filter>
-<rect width="1600" height="320" filter="url(#film)"></rect>
+<rect width="1920" height="180" filter="url(#film)"></rect>
 </svg>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"startInGamingMode":{"editor":"boolean","default":false},"$preview":{"width":1600,"height":320}}'>
+<script type="text/x-dc" data-dc-script data-props='{"startInGamingMode":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":180}}'>
 class Component extends DCLogic {
   constructor(props) {
     super(props);

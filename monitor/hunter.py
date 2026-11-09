@@ -1,6 +1,7 @@
 """The Khaltron 9000 header, built to the owner's design package (design/khaltron-header/: README.md is the spec,
-khaltron-header.js the behaviour, khaltron-header.css the looks): a mechanical raccoon robot gripping a steel
-ledge, watching up to six apps that stand as cards on the ledge, with the gaming-mode button top right.
+khaltron-header.js the behaviour, khaltron-header.css the looks): the thin top bar (1920 x 180, the owner's
+shorter version of 2026-11-09). A mechanical raccoon robot in the middle, cropped at the chest, whose glowing eyes
+watch up to six apps shown as cards, three on each side, with the gaming-mode button top right.
 
 The design is a web page; this is the same thing on a tkinter Canvas, in the design's own 1600 x 320 coordinates
 scaled to the window's width (5:1, like the design):
@@ -38,22 +39,23 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageTk
 from . import theme
 from .config import HOME
 
-NATIVE_W, NATIVE_H = 1600, 320
-# The stage is wider than the design (the owner asked for a shorter header): the design's 1600-wide scene sits in
-# the middle and the dark background and the ledge simply continue to the sides. At the same window width the
-# header is 1600/1850 = 86% as tall, and nothing in the artwork is cut.
-VIEW_W = 1850
-OFFSET = (VIEW_W - NATIVE_W) / 2  # the design's x + OFFSET = the stage's x
+NATIVE_W, NATIVE_H = 1920, 180   # the design's thin top bar (10.7:1): ~110 px tall in a 1180 px window
+VIEW_W = NATIVE_W
+OFFSET = 0
 CYAN, RED = "#35E0FF", "#FF3B3B"
-EYES = [(765, 115), (834, 112)]
-CAM = (799, 114)          # the push-in's origin
-SLOTS = [96, 226, 681, 811, 1254, 1384]
-CARD_TOP, CARD_W, CARD_H = 268, 120, 48
-ANGLES = [74.5, 70.9, 18, -22, -70.9, -74.6]                 # beam rotation per card (degrees, CSS rotate)
-PUPIL = [(-2, 1.2), (-1.6, 1.2), (-.8, 1.6), (.8, 1.6), (1.6, 1.2), (2, 1.2)]
-DOWN = "c"                # look straight down at all cards
-LIDS = [[(747.4, 98.2), (783.4, 98.2), (783.4, 113.8), (747.4, 104.6)],
-        [(816, 96), (852, 96), (852, 102.4), (816, 111.2)]]
+EYES = [(931, 94), (987, 91)]
+CAM = (959, 92)           # the push-in's origin
+ART_BOX = (570, 0, 780, 260)  # the artwork's left, top, width, height (the bar's bottom edge crops it at the chest)
+SLOTS = [28, 188, 348, 1422, 1582, 1742]                     # three cards left of the robot, three right
+CARD_TOP, CARD_W, CARD_H = 112, 150, 50
+ANGLES = [87, 86.3, 85.2, -85.2, -86.3, -87]                 # beam rotation per card (degrees, CSS rotate)
+PUPIL = [(-2.5, .6), (-2.2, .6), (-2, .6), (2, .6), (2.2, .6), (2.5, .6)]
+DOWN = "c"                # "look-c": each eye floods its own side (left beam the left cards, right beam the right)
+DOWN_ANGLES, DOWN_SCALE = (86, -86), 7.0
+LIDS = [[(917, 80), (946.4, 80), (946.4, 92.6), (917, 85.2)],
+        [(972.7, 78.2), (1001.9, 78.2), (1001.9, 83.4), (972.7, 90.6)]]
+EYE = {"glow": 10.5, "dark": 5.7, "ring": 4.5, "ring_w": 1.4, "pupil": 2.6, "spark": 1.2}
+BEAM = {"start": 4, "length": 1000, "half": 20, "laser_from": 8, "laser_to": 966}
 TIMING = {"idleStep": 1800, "firstIdle": 1200, "sweepStart": 450, "lookToWarn": 380, "warnToNext": 260,
           "afterLastWarn": 800, "pausingToLocked": 1300}
 STATUS = {"monitored": ("● MONITORED", "#7FE9FF"), "scanning": ("SCANNING…", "#C2AEAE"),
@@ -96,31 +98,21 @@ def _native_scene(hunt: bool) -> Image.Image:
     with _lock:
         if hunt in _native:
             return _native[hunt]
-        # the dark background: radial-gradient(ellipse at 50% 30%, #15181D 0%, #07080A 70%)
-        radial = Image.radial_gradient("L").resize((int(VIEW_W * 1.4), int(NATIVE_H * 2.2)))
-        left, top = int(VIEW_W * .5 - radial.width / 2), int(NATIVE_H * .3 - radial.height / 2)
+        # the dark background: radial-gradient(ellipse at 50% 40%, #15181D 0%, #07080A 60%)
+        radial = Image.radial_gradient("L").resize((int(VIEW_W * 1.2), int(NATIVE_H * 2.4)))
+        left, top = int(VIEW_W * .5 - radial.width / 2), int(NATIVE_H * .4 - radial.height / 2)
         mask = Image.new("L", (VIEW_W, NATIVE_H), 255)
-        mask.paste(radial.point(lambda v: min(255, int(v / .70))), (left, top))
+        mask.paste(radial.point(lambda v: min(255, int(v / .60))), (left, top))
         img = Image.composite(Image.new("RGB", mask.size, "#07080A"), Image.new("RGB", mask.size, "#15181D"), mask)
-        # the steel ledge band across the full width: linear-gradient(#4A4D52 0, #2C2E32 3px, #1F2125 40%, #141518)
-        ledge = ImageDraw.Draw(img)
-        for y in range(263, NATIVE_H):
-            d = y - 263
-            if d < 3:
-                c = theme.mix("#4A4D52", "#2C2E32", d / 3)
-            elif d < 57 * .4:
-                c = theme.mix("#2C2E32", "#1F2125", (d - 3) / (57 * .4 - 3))
-            else:
-                c = theme.mix("#1F2125", "#141518", (d - 57 * .4) / (57 * .6))
-            ledge.line([(0, y), (VIEW_W, y)], fill=c)
-        # the artwork: 960 x 320 at x 320, its outer 14% on each side faded into the background
+        # the artwork: 780 x 260 at (570, 0), cropped at the chest by the bar's edge, outer 14% faded into the dark
         if ART.exists():
-            art = Image.open(ART).convert("RGB").resize((960, 320), Image.LANCZOS)
-            fade = Image.new("L", (960, 1))
-            for x in range(960):
-                t = x / 959
+            ax, ay, aw, ah = ART_BOX
+            art = Image.open(ART).convert("RGB").resize((aw, ah), Image.LANCZOS)
+            fade = Image.new("L", (aw, 1))
+            for x in range(aw):
+                t = x / (aw - 1)
                 fade.putpixel((x, 0), int(255 * min(1, t / .14, (1 - t) / .14)))
-            img.paste(art, (int(320 + OFFSET), 0), fade.resize((960, 320)))
+            img.paste(art, (ax, ay), fade.resize((aw, ah)))
         if hunt:
             # the camera pushes in 6% toward the eyes (the cards and brand stay put; they are drawn live)
             z, (cx, cy) = 1.06, (CAM[0] + OFFSET, CAM[1])
@@ -134,8 +126,8 @@ def _native_scene(hunt: bool) -> Image.Image:
             img = ImageEnhance.Brightness(img).enhance(.7)  # the 30% darkening
             # the red vignette: inset 0 0 130px rgba(255,30,30,.45)
             edge = Image.new("L", img.size, 0)
-            ImageDraw.Draw(edge).rectangle((0, 0, VIEW_W - 1, NATIVE_H - 1), outline=255, width=60)
-            edge = edge.filter(ImageFilter.GaussianBlur(55)).point(lambda v: int(v * .45))
+            ImageDraw.Draw(edge).rectangle((0, 0, VIEW_W - 1, NATIVE_H - 1), outline=255, width=34)
+            edge = edge.filter(ImageFilter.GaussianBlur(30)).point(lambda v: int(v * .45))  # inset 70px
             img = Image.composite(Image.new("RGB", img.size, (255, 30, 30)), img, edge)
         # film grain (.12, overlay)
         noise = Image.effect_noise(img.size, 45).convert("RGB")
@@ -186,7 +178,7 @@ class KhaltronHeader(tk.Canvas):
         self.frozen_names: set[str] | None = None
         self.flash: dict[int, tuple[float, str]] = {}
         self.timer = None
-        self.gaze = {"angle": ANGLES[2], "scale": 1.0, "pupil": PUPIL[2], "from": None, "since": 0.0}
+        self.gaze = {"angle": (ANGLES[2], ANGLES[2]), "scale": 1.0, "pupil": PUPIL[2], "from": None, "since": 0.0}
         self.hover = False
         self.mode_line, self.banner, self.button_items = [], [], []
         self.started = time.time()
@@ -238,11 +230,12 @@ class KhaltronHeader(tk.Canvas):
         self.eyes = []
         for i, (ex, ey) in enumerate(EYES):
             x, y = self.cam(ex, ey)
+            g, d, r_ = EYE["glow"], EYE["dark"], EYE["ring"]
             glow = [self.create_oval(x - r * S, y - r * S, x + r * S, y + r * S, outline=a, width=max(1, 2 * S))
-                    for r in (13, 9.5)]
-            red = [self.create_oval(x - 7 * S, y - 7 * S, x + 7 * S, y + 7 * S, fill="#0A0204", outline=""),
-                   self.create_oval(x - 5.6 * S, y - 5.6 * S, x + 5.6 * S, y + 5.6 * S, outline=RED,
-                                    width=max(1, 1.6 * S))]
+                    for r in (g, g * .72)]
+            red = [self.create_oval(x - d * S, y - d * S, x + d * S, y + d * S, fill="#0A0204", outline=""),
+                   self.create_oval(x - r_ * S, y - r_ * S, x + r_ * S, y + r_ * S, outline=RED,
+                                    width=max(1, EYE["ring_w"] * S))]
             for item in red:
                 self.itemconfigure(item, state="normal" if self.hunt else "hidden")
             pupil = [self.create_oval(0, 0, 0, 0, fill=a, outline=""), self.create_oval(0, 0, 0, 0, fill="#ffffff",
@@ -259,7 +252,7 @@ class KhaltronHeader(tk.Canvas):
         self.beams_ready = False
         # dust motes drifting up
         rng = random.Random(11)
-        self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(40, VIEW_W - 40), rng.uniform(90, 250),
+        self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(40, VIEW_W - 40), rng.uniform(80, 165),
                        rng.uniform(0, 10), rng.uniform(8, 13)) for _ in range(14)]
         # the cards
         self.card_items = []
@@ -267,16 +260,16 @@ class KhaltronHeader(tk.Canvas):
                                 size=-max(9, round(12 * S)))
         tag_font = tkfont.Font(family=theme.MONO, size=-max(8, round(9 * S)))
         status_font = tkfont.Font(family=theme.MONO, size=-max(8, round(9 * S)), weight="bold")
-        badge_font = tkfont.Font(family=theme.MONO, size=-max(8, round(10 * S)), weight="bold")
+        badge_font = tkfont.Font(family=theme.MONO, size=-max(7, round(9 * S)), weight="bold")
         self.fonts = {"name": name_font, "tag": tag_font, "badge": badge_font}
         for slot in SLOTS:
             x0, y0 = self.D(slot, CARD_TOP)
             w, h = CARD_W * S, CARD_H * S
             pad = 10 * S
             items = {"x0": x0, "y0": y0, "w": w, "h": h, "dy": 0.0}
-            items["ring"] = self.create_polygon(*_round_rect(x0 - 2, y0 - 2, x0 + w + 2, y0 + h + 2, 10 * S),
+            items["ring"] = self.create_polygon(*_round_rect(x0 - 2, y0 - 2, x0 + w + 2, y0 + h + 2, 9 * S),
                                                 smooth=True, fill="", outline="", width=2, state="hidden")
-            items["box"] = self.create_polygon(*_round_rect(x0, y0, x0 + w, y0 + h, 9 * S), smooth=True,
+            items["box"] = self.create_polygon(*_round_rect(x0, y0, x0 + w, y0 + h, 8 * S), smooth=True,
                                                fill="#080C12", outline=a, width=1)
             items["name"] = self.create_text(x0 + pad, y0 + 13 * S, anchor="w", fill="#F2F7FB", font=name_font)
             items["tag"] = self.create_text(x0 + w - pad, y0 + 13 * S, anchor="e", fill="#93A5B6", font=tag_font)
@@ -284,25 +277,26 @@ class KhaltronHeader(tk.Canvas):
                                                    fill="#1A2129", width=0)
             items["fill"] = self.create_rectangle(x0 + pad, y0 + 24 * S, x0 + pad, y0 + 28 * S, fill=a, width=0)
             items["status"] = self.create_text(x0 + pad, y0 + 38 * S, anchor="w", font=status_font)
-            k = 12 * S
-            items["corners"] = [self.create_line(x0 - 6 * S, y0 - 6 * S + k, x0 - 6 * S, y0 - 6 * S, x0 - 6 * S + k,
-                                                 y0 - 6 * S, fill=RED, width=2, state="hidden"),
-                                self.create_line(x0 + w + 6 * S, y0 + h + 6 * S - k, x0 + w + 6 * S, y0 + h + 6 * S,
-                                                 x0 + w + 6 * S - k, y0 + h + 6 * S, fill=RED, width=2, state="hidden")]
+            k, o = 10 * S, 5 * S
+            items["corners"] = [self.create_line(x0 - o, y0 - o + k, x0 - o, y0 - o, x0 - o + k, y0 - o,
+                                                 fill=RED, width=2, state="hidden"),
+                                self.create_line(x0 + w + o, y0 + h + o - k, x0 + w + o, y0 + h + o,
+                                                 x0 + w + o - k, y0 + h + o, fill=RED, width=2, state="hidden")]
             items["badge_bg"] = self.create_polygon(0, 0, 0, 0, 0, 0, smooth=True, fill=RED, outline="",
                                                     state="hidden")
             items["badge"] = self.create_text(0, 0, text="TERMINATE?", fill="#1A0404", state="hidden", font=badge_font)
             self.card_items.append(items)
         # brand: wordmark, mode line, banner
         bx, by = self.P(28, 16)
-        word = tkfont.Font(family=theme.DISPLAY, size=-max(14, round(24 * S)))
+        word = tkfont.Font(family=theme.DISPLAY, size=-max(13, round(22 * S)))
         self._spaced(bx, by, "KHALTRON 9000", word, "#F2F7FB", .08, anchor="nw")
-        line_y = by + word.metrics("linespace") + 9 * S
-        self.dot = self.create_oval(bx, line_y - 4 * S, bx + 8 * S, line_y + 4 * S, fill=a, outline="")
-        self.line_font = tkfont.Font(family=theme.MONO, size=-max(9, round(12 * S)))
-        self.banner_font = tkfont.Font(family=theme.MONO, size=-max(8, round(11 * S)), weight="bold")
-        self.mode_line_at = (bx + 18 * S, line_y)
-        self.banner_at = (bx, line_y + 21 * S)
+        self.line_font = tkfont.Font(family=theme.MONO, size=-max(8, round(11 * S)))
+        self.banner_font = tkfont.Font(family=theme.MONO, size=-max(7, round(10 * S)), weight="bold")
+        line_y = by + word.metrics("linespace") + 5 * S + self.line_font.metrics("linespace") / 2
+        dot = max(3, 3.5 * S)
+        self.dot = self.create_oval(bx, line_y - dot, bx + 2 * dot, line_y + dot, fill=a, outline="")
+        self.mode_line_at = (bx + 2 * dot + 9 * S, line_y)
+        self.banner_at = (bx, line_y + self.line_font.metrics("linespace") + 4 * S)
         self.mode_line, self.banner, self.button_items = [], [], []
         self.button_font = tkfont.Font(family=theme.DISPLAY_SEMI, size=-max(10, round(13 * S)))
         self._paint_text()
@@ -458,7 +452,7 @@ class KhaltronHeader(tk.Canvas):
         else:
             line, banner = "GAMING MODE // ALL PROCESSES PAUSED", "⚠ ALL NON-ESSENTIAL PROCESSES PAUSED"
         self.mode_line = self._spaced(*self.mode_line_at, line, self.line_font, "#B4C3D1", .18)
-        self.banner = self._spaced(*self.banner_at, banner, self.banner_font, "#FF6B6B", .18) if banner else []
+        self.banner = self._spaced(*self.banner_at, banner, self.banner_font, "#FF6B6B", .16) if banner else []
         self.itemconfigure(self.dot, fill=self.accent)
 
     def _paint_button(self):
@@ -557,11 +551,12 @@ class KhaltronHeader(tk.Canvas):
             ring = theme.mix(theme.BG, RED if hunt_target else CYAN, .35 if hunt_target else .25)
             self.itemconfigure(items["ring"], outline=ring, state="normal" if targeted else "hidden")
             if hunt_target:
-                bx1, by = x0 + w - 10 * S, items["y0"] - 11 * S
-                bw = self.fonts["badge"].measure("TERMINATE?") + 18 * S
-                self.coords(items["badge"], bx1 - bw / 2, by + 8 * S)
-                self.coords(items["badge_bg"], *_round_rect(bx1 - bw, by, bx1, by + 16 * S, 8 * S))
-            self._lift(items, -6 * S if hunt_target else 0)
+                bh = self.fonts["badge"].metrics("linespace") + 2
+                bx1, by = x0 + w - 10 * S, items["y0"] - bh + 3  # mostly above the card's top edge
+                bw = self.fonts["badge"].measure("TERMINATE?") + 16 * S
+                self.coords(items["badge"], bx1 - bw / 2, by + bh / 2)
+                self.coords(items["badge_bg"], *_round_rect(bx1 - bw, by, bx1, by + bh, bh / 2))
+            self._lift(items, -4 * S if hunt_target else 0)
 
     def _lift(self, items, dy):
         """The targeted card rises 6px in gaming mode."""
@@ -578,10 +573,10 @@ class KhaltronHeader(tk.Canvas):
         g = self.gaze
         g["from"] = (g["angle"], g["scale"], g["pupil"])
         if look == DOWN:
-            g["to"] = (0.0, 60.0, (0, 3))
+            g["to"] = (DOWN_ANGLES, DOWN_SCALE, (0, 1))
         else:
             look = min(look, len(SLOTS) - 1)
-            g["to"] = (ANGLES[look], 1.0, PUPIL[look])
+            g["to"] = ((ANGLES[look], ANGLES[look]), 1.0, PUPIL[look])
         g["since"] = time.time()
         self.beams_ready = False
 
@@ -603,7 +598,8 @@ class KhaltronHeader(tk.Canvas):
         if g.get("to"):
             k = _ease((time.time() - g["since"]) / .55)
             (a0, s0, p0), (a1, s1, p1) = g["from"], g["to"]
-            g["angle"], g["scale"] = a0 + (a1 - a0) * k, s0 + (s1 - s0) * k
+            g["angle"] = tuple(x0 + (x1 - x0) * k for x0, x1 in zip(a0, a1))
+            g["scale"] = s0 + (s1 - s0) * k
             g["pupil"] = (p0[0] + (p1[0] - p0[0]) * k, p0[1] + (p1[1] - p0[1]) * k)
             moving = k < 1
         # the shake (gaming mode, until it locks): the camera layer jumps by 1.5px
@@ -624,34 +620,35 @@ class KhaltronHeader(tk.Canvas):
             for ring, share in zip(eye["glow"], (.55, .9)):
                 self.itemconfigure(ring, outline=theme.mix("#05070A", a, share * strength))
             ex, ey = eye["x"] + self.shaken[0], eye["y"] + self.shaken[1]
-            px, py = ex + g["pupil"][0] * S, ey + g["pupil"][1] * S
-            for item, r in zip(eye["pupil"], (3.2, 1.5)):
+            px, py = ex + g["pupil"][0] * S, ey + g["pupil"][1] * S  # (design px, scaled)
+            for item, r in zip(eye["pupil"], (EYE["pupil"], EYE["spark"])):
                 self.coords(item, px - r * S, py - r * S, px + r * S, py + r * S)
         # beams: a cone from each eye, rotated toward the card (scaled wide when looking down); lasers in gaming
         if moving or force or (self.hunt and not locked) or not self.beams_ready:
-            theta = math.radians(g["angle"])
             flicker = self.hunt and not locked and int(t * 1000 / 120) % 2
-            for beam, laser, (bx, by) in zip(self.beams, self.lasers, EYES):
+            for beam, laser, (bx, by), angle in zip(self.beams, self.lasers, EYES, g["angle"]):
                 ox, oy = self.D(bx, by)
+                theta = math.radians(angle)
 
-                def rot(px, py, ox=ox, oy=oy, bx=bx, by=by):
+                def rot(px, py, ox=ox, oy=oy, bx=bx, by=by, theta=theta):
                     vx, vy = px - bx, py - by
                     rx = vx * math.cos(theta) - vy * math.sin(theta)
                     ry = vx * math.sin(theta) + vy * math.cos(theta)
                     return ox + rx * S, oy + ry * S
-                half = 25 * g["scale"]
-                self.coords(beam, *rot(bx, by + 4), *rot(bx - half, by + 820), *rot(bx + half, by + 820))
+                half, length = BEAM["half"] * g["scale"], BEAM["length"]
+                self.coords(beam, *rot(bx, by + BEAM["start"]), *rot(bx - half, by + length),
+                            *rot(bx + half, by + length))
                 wide = g["scale"] > 2  # flooding every card: fainter, so the cards stay readable
                 self.itemconfigure(beam, fill=a, stipple="gray25" if self.hunt and not wide else "gray12",
-                                   state="hidden" if flicker else "normal")
-                self.coords(laser, *rot(bx, by + 8), *rot(bx, by + 805))
+                                   state="hidden" if flicker or locked else "normal")  # gone once locked
+                self.coords(laser, *rot(bx, by + BEAM["laser_from"]), *rot(bx, by + BEAM["laser_to"]))
                 self.itemconfigure(laser, state="normal" if self.hunt and g["scale"] < 2 else "hidden")
             self.beams_ready = not moving
         # dust drifting up (frozen in mid-air once locked)
         if not locked:
             for item, x0, y0, phase, dur in self.motes:
                 p = ((t + phase) % dur) / dur
-                x, y = self.P(x0 + 18 * p, y0 - 70 * p)
+                x, y = self.P(x0 + 14 * p, y0 - 50 * p)
                 fade = .55 if .2 <= p <= .8 else (p / .2 * .55 if p < .2 else (1 - p) / .2 * .45)
                 r = max(1, 1.2 * S)
                 self.coords(item, x - r, y - r, x + r, y + r)

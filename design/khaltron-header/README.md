@@ -1,8 +1,8 @@
 # Khaltron 9000 — App Header (handoff)
 
-This folder contains a finished, working header for the **Khaltron 9000** app (a laptop-activity monitor).
-It's a mechanical raccoon robot gripping a steel ledge, watching the apps running "below" it.
-Use this as the source of truth for the header and build the rest of the app's design around it.
+This folder contains a finished, working **top bar** for the **Khaltron 9000** app (a laptop-activity monitor).
+It's a thin, wide panel with a mechanical raccoon robot in the center, cropped at the chest, whose glowing eyes watch the running apps shown on either side.
+Use this as the source of truth for the top bar and build the rest of the app's design around it.
 
 Open `index.html` in a browser to see it live. Click **GAMING MODE** (top right).
 
@@ -48,7 +48,7 @@ Open `index.html` in a browser to see it live. Click **GAMING MODE** (top right)
 
 Fonts: Orbitron (wordmark and button) and JetBrains Mono (everything else), from Google Fonts. See the `<link>` in `index.html`.
 
-The header renders at a fixed native size of **1600 × 320 px** and scales down to fit its container's width, keeping that 5:1 shape.
+The bar renders at a fixed native size of **1920 × 180 px** and scales to fit its container's width, keeping that 10.7:1 shape (at 1440 px wide it's about 135 px tall; at 1280 px it's 120 px).
 All coordinates below are in that native space.
 
 ## Behavior
@@ -60,22 +60,22 @@ All coordinates below are in that native space.
 
 ### Gaming mode (click the button): plays once, then freezes
 1. **Engage (0 ms):** theme turns red. The scene gets a red color grade and darkens 30%, the camera pushes in 6% toward the eyes and shakes, a red vignette pulses, the eyes turn red with angry dark lids, the beams go solid red with a laser line, and the banner reads "GAMING MODE ENGAGED — ISSUING WARNINGS".
-2. **Sweep:** the robot glares at each card in order (0 → 5). For each card: look (380 ms), then the card flashes red and shows "⚠ WARNED", then 260 ms before the next one. The card being looked at lifts up, gets red corner brackets and a blinking "TERMINATE?" badge. Cards it hasn't reached yet show "SCANNING…".
-3. **Pausing (800 ms after the last warning):** the robot looks straight down, the beams widen to flood every card, and all cards flash and switch to "⏸ PAUSED". The banner reads "ALL NON-ESSENTIAL PROCESSES PAUSED".
+2. **Sweep:** the robot glares at each card in order (0 → 5, left side then right side). For each card: look (380 ms), then the card flashes red and shows "⚠ WARNED", then 260 ms before the next one. The card being looked at lifts up, gets red corner brackets and a blinking "TERMINATE?" badge. Cards it hasn't reached yet show "SCANNING…".
+3. **Pausing (800 ms after the last warning):** the left eye's beam floods the left cards and the right eye's beam floods the right cards. All cards flash and switch to "⏸ PAUSED". The banner reads "ALL NON-ESSENTIAL PROCESSES PAUSED".
 4. **Locked (1.3 s later):** **everything stops.** No shaking, pulsing, flicker or blinking, and the dust freezes in mid-air. It stays red and stares down at the apps until the user exits. `onLocked` fires here, which is where the real app should pause the processes.
 
 Clicking **EXIT GAMING MODE** at any point returns to monitor mode.
 Timings are in `KhaltronHeader.TIMING`. `prefers-reduced-motion` turns off the looping animations.
 
-## Layout spec (native 1600 × 320)
+## Layout spec (native 1920 × 180)
 
-- **Artwork:** shown at 960 × 320, `left: 320px`. Its left and right 14% fade into the dark background (`radial-gradient(#15181D → #07080A)`). A steel ledge band continues the photo's ledge across the full width at `top: 263px; height: 57px`.
-- **Robot eyes (overlay anchors):** left eye **(765, 115)**, right eye **(834, 112)**. The camera push-in uses origin (799, 114).
-- **Brand (top-left, 28 px / 16 px):** "KHALTRON 9000" in Orbitron 800 24px, letter-spacing .08em. Below it, a mode line (status dot + text, 12px, .18em). In gaming mode, a red warning banner sits below that.
+- **Artwork:** shown at 780 × 260, `left: 570px; top: 0`. The bar's bottom edge crops it at the robot's chest (the hands and ledge are cut off). Its left and right 14% fade into the dark background (`radial-gradient(#15181D → #07080A)`).
+- **Robot eyes (overlay anchors):** left eye **(931, 94)**, right eye **(987, 91)**. The camera push-in uses origin (959, 92).
+- **Brand (top-left, 28 px / 16 px):** "KHALTRON 9000" in Orbitron 800 22px, letter-spacing .08em. Below it, a mode line (status dot + text, 11px, .18em). In gaming mode, a red warning banner (10px) sits below that.
 - **Toggle button (top-right, 28 px / 16 px):** pill, 44 px tall, 1 px accent border, Orbitron 600 13px.
-- **App cards:** 6 fixed slots, each 120 × 48 at `top: 268px`, sitting on the ledge between and around the robot's hands:
-  slot lefts = **96, 226, 681, 811, 1254, 1384**. Each card has the name (12px, 600), a tag (9px), a 4 px load bar and a status line (9px caps).
-- **Beam angles per slot (from the eyes):** 74.5°, 70.9°, 18°, −22°, −70.9°, −74.6°. If you move the slots, recompute these with `atan(dx/dy)` from the eye midpoint (799, 114) to the card's center.
+- **App cards:** 6 fixed slots, each 150 × 50 at `top: 112px`, three on each side of the robot:
+  slot lefts = **28, 188, 348** (left) and **1422, 1582, 1742** (right). Each card has the name (12px, 600), a tag (9px), a 4 px load bar and a status line (9px caps: MONITORED / SCANNING… / WARNED / PAUSED).
+- **Beam angles per slot (from the eyes):** 87°, 86.3°, 85.2°, −85.2°, −86.3°, −87°. The beams run almost sideways because the cards are beside the robot. If you move the slots, recompute these with `atan(dx/dy)` from the eye midpoint (959, 92) to the card's center.
 
 ## Design tokens
 

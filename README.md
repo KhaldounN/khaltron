@@ -36,10 +36,10 @@ can still see and control.
 - **Protected processes**: things that must never be stopped (by default: a voice server, a website, Khaltron itself)
   have no Stop button, and are checked again right before any stop.
 - **Notifications**: a Windows pop-up when a job starts, finishes or fails, and when free memory runs low.
-- **A header that watches**: a mechanical raccoon grips a steel ledge where your six busiest apps stand as
-  cards; in monitor mode (cyan) it looks from card to card. Click **GAMING MODE** and it plays the design's
-  sequence once: red, it pushes in and glares at every card (TERMINATE?, WARNED), looks down as the beams flood
-  the ledge (PAUSED), then locks still. At that moment the jobs are really frozen. Cards it doesn't pause
+- **A top bar that watches**: a slim bar (about 110 px tall) with a mechanical raccoon in the middle and your
+  six busiest apps as cards on either side; in monitor mode (cyan) it looks from card to card. Click **GAMING MODE** and it plays the design's
+  sequence once: red, it pushes in and glares at every card (TERMINATE?, WARNED), its beams flood each
+  side (PAUSED), then locks still. At that moment the jobs are really frozen. Cards it doesn't pause
   (your browser...) honestly say SPARED. The design package it follows is in `design/khaltron-header/`.
 - **Gaming mode**: one click on the header's GAMING MODE button (or Ctrl+Alt+G) freezes every background job, any other
   heavy Python script of yours and safe background apps (OneDrive by default) so a game gets the CPU and memory,
