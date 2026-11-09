@@ -19,8 +19,8 @@ can still see and control.
 
 ## Why I made it
 
-*By Khaldoun Alnaierat.* I run big, complex analyses on my PC, often with Claude, and they keep working in the
-background for hours. When I play games, I want that power back. Khaltron shows me everything running in the
+*By Khaldoun Alnaierat.* I run big, complex analyses and Python jobs on my PC, often with Claude, and they keep
+working in the background for hours. That's why I need Khaltron. When I play games, I want that power back. Khaltron shows me everything running in the
 background, lets me pause it all with one click, and picks up where it left off when I'm done. Have fun with it:
 it's free and open source, and I'm happy for anyone to use it. (It's also the **About** tab in the app.)
 
