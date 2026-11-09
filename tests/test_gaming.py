@@ -125,7 +125,9 @@ def test_off_refreshes_the_status_file_of_a_frozen_worker(game, fake_worker, tmp
 
 
 def test_protected_programs_are_never_frozen(game):
-    website = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "streamlit", "analyzer.worker"])
+    # protected on every PC: Khaltron's own queue runner (even if its command line also looks like a job)
+    website = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "monitor.runner",
+                                "analyzer.worker"])
     try:
         started(website)
         gaming.turn_on()

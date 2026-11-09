@@ -163,7 +163,8 @@ def _freeze_new(state: dict) -> list[str]:
             # named BEFORE freezing: _trim empties its RAM, and the extras are recognised by their RAM
             cmdline = _cmdline(process)
             name = (getattr(process, "info", None) or {}).get("name") or process.name()
-            label = next((lbl for needle, lbl, _ in KNOWN if needle in cmdline), None) or \
+            label = ("Book Analyzer website" if website(cmdline) else None) or \
+                next((lbl for needle, lbl, _ in KNOWN if needle in cmdline), None) or \
                 _extras(process, name.lower(), cmdline) or "Planned job"
             process.suspend()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
