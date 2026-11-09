@@ -17,6 +17,13 @@ can still see and control.
 
 ![Khaltron 9000's Overview: a one-line briefing, RAM / CPU / jobs cards, the running jobs, what is next, and where the PC's power goes](assets/screenshot.png)
 
+## Why I made it
+
+*By Khaldoun Alnaierat.* I like to analyze things, and I run large, complex analyses on my PC. Many of them run
+in the background for hours, often started with Claude. But when I play games, I want my PC back, so I need to
+stop all of that first. I created Khaltron to give me visibility and control over all these background
+processes. Have fun with it: I'm happy for other people to use it. (It's also the **About** tab in the app.)
+
 ## Features
 
 - **Two views.** *Overview* (the default) is the whole picture at a glance: a one-sentence briefing with a status
@@ -132,6 +139,7 @@ Processes that must never be stopped are listed in `KNOWN` in `monitor\sources\p
 | `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
 | `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
 | `monitor\hunter.py` | the header, built to `design/khaltron-header/` (its README is the spec): the raccoon, its eyes and beams, the cards, the gaming-mode sequence |
+| `monitorbout.py` | the About tab: who made it and why |
 | `monitor\hud.py` | the stat cards with live graphs, the job cards, the overview parts |
 | `monitor\theme.py` | every colour and font, the logo, the dark title bar |
 | `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |

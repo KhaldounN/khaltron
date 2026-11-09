@@ -98,3 +98,18 @@ def test_programs_on_this_pc_are_read_in_one_quick_call():
     assert all(0 <= p.cpu <= 100.5 and p.memory_mb >= 0 for p in found)
     assert sum(p.processes for p in found) > 20
     assert any(not p.yours for p in found)  # Windows' own services are there too
+
+
+def test_the_gaming_sound_copy_is_quieter_and_as_long(tmp_path, monkeypatch):
+    """winsound has no volume control: Khaltron writes a copy at the chosen volume once and plays that."""
+    import array
+    import wave
+    from monitor import sound
+    monkeypatch.setattr(sound, "STATE", tmp_path)
+    copy = sound._at_volume(0.5)
+    with wave.open(str(sound.SOURCE)) as a, wave.open(str(copy)) as b:
+        assert a.getnframes() == b.getnframes() and a.getframerate() == b.getframerate()
+        loud = max(abs(v) for v in array.array("h", a.readframes(a.getnframes())))
+        quiet = max(abs(v) for v in array.array("h", b.readframes(b.getnframes())))
+    assert abs(quiet - loud * 0.5) <= 2
+    assert sound._at_volume(0.5) == copy  # made once, then reused

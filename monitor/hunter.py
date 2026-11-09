@@ -353,6 +353,8 @@ class KhaltronHeader(tk.Canvas):
         if self.hunt:
             return
         self.user_engaged = user
+        from . import sound
+        sound.play_gaming()  # the design's activation sound (2.4 s): its drop lands as the bar turns red
         # all six cards, as in the design: what gaming mode really pauses first, then the other apps (spared)
         targets = list(self.targets_cb() or [])
         names = {c.name for c in targets}

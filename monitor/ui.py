@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import actions, alerts, gaming, planned, runner, theme
 from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
+from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
 from .collect import State, collect
 from .config import BOOK, CONFIG
@@ -187,7 +188,7 @@ class App:
         # the toolbar: which view (left); gaming mode, hide, the control menu (right)
         top = ttk.Frame(outer)
         top.pack(fill="x")
-        self.view_switch = ViewSwitch(top, ["Overview", "Details"], self.show_view)
+        self.view_switch = ViewSwitch(top, ["Overview", "Details", "About"], self.show_view)
         self.view_switch.pack(side="left")
         start = ttk.Menubutton(top, text="Start / control")
         menu = tk.Menu(start, tearoff=False)
@@ -285,15 +286,18 @@ class App:
         tabs.add(self.procs, text="Python processes")
         tabs.add(self.problems, text="Problems")
         panes.add(tabs, weight=3)
+        # ABOUT: who made it and why
+        self.about = AboutPage(views)
         self.show_view("Overview")
 
 
     def show_view(self, view: str):
-        """Overview (simple, the default) or Details (every table)."""
+        """Overview (simple, the default), Details (every table) or About (who made it and why)."""
         self.view_switch.select(view)
-        self.overview.pack_forget()
-        self.details.pack_forget()
-        (self.overview if view == "Overview" else self.details).pack(fill="both", expand=True)
+        pages = {"Overview": self.overview, "Details": self.details, "About": self.about}
+        for page in pages.values():
+            page.pack_forget()
+        pages[view].pack(fill="both", expand=True)
 
     def brand(self):
         """The header, after the owner's design (khaltron-header.css): the robot watching the six busiest programs

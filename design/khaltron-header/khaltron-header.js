@@ -6,6 +6,8 @@
  *     onModeChange: (mode) => {},      // 'monitor' | 'gaming'
  *     onPhaseChange: (phase) => {},    // 'watch' | 'sweep' | 'pausing' | 'locked'
  *     onLocked: (processes) => {},     // gaming sequence finished: pause the real processes here
+ *     sound: 'assets/khaltron-gaming-mode.mp3', // played when gaming mode turns on; false = silent
+ *     volume: 0.8,
  *   });
  *   header.setProcesses([...]); header.engage(); header.disengage(); header.destroy();
  */
@@ -101,6 +103,18 @@
     var $ = function (k) { return root.querySelector('[data-kh="' + k + '"]'); };
     var btn = root.querySelector('.toggle');
 
+    // Gaming-mode activation sound (plays on the click that turns it on).
+    var sfx = null;
+    if (opts.sound !== false && typeof Audio !== 'undefined') {
+      sfx = new Audio(opts.sound || 'assets/khaltron-gaming-mode.mp3');
+      sfx.preload = 'auto';
+    }
+    var volume = opts.volume == null ? 0.8 : opts.volume;
+    function playSfx() {
+      if (!sfx) return;
+      try { sfx.volume = volume; sfx.currentTime = 0; var pr = sfx.play(); if (pr && pr.catch) pr.catch(function () {}); } catch (e) {}
+    }
+
     // Scale the 1920x180 canvas to the container width.
     function resize() {
       var s = fit.clientWidth / 1920 || 1;
@@ -162,6 +176,7 @@
 
     function engage() {
       if (state.hunt) return;
+      playSfx();
       set({ hunt: true, phase: 'sweep', look: 0, warned: -1 });
       var last = processes.length - 1;
       var sweep = function (k) {
@@ -192,9 +207,11 @@
     return {
       engage: engage,
       disengage: disengage,
+      setVolume: function (v) { volume = Math.max(0, Math.min(1, v)); },
+      setSoundEnabled: function (on) { if (!on) sfx = null; else if (!sfx && typeof Audio !== 'undefined') { sfx = new Audio(opts.sound || 'assets/khaltron-gaming-mode.mp3'); } },
       setProcesses: function (list) { processes = (list || []).slice(0, 6); renderCards(); render(); },
       getState: function () { return { mode: state.hunt ? 'gaming' : 'monitor', phase: state.phase, look: state.look }; },
-      destroy: function () { alive = false; clearTimeout(timer); if (ro) ro.disconnect(); else global.removeEventListener('resize', resize); fit.remove(); }
+      destroy: function () { alive = false; if (sfx) { try { sfx.pause(); } catch (e) {} } clearTimeout(timer); if (ro) ro.disconnect(); else global.removeEventListener('resize', resize); fit.remove(); }
     };
   }
 

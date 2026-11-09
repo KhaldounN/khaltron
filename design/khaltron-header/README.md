@@ -15,6 +15,7 @@ Open `index.html` in a browser to see it live. Click **GAMING MODE** (top right)
 | `khaltron-header.js` | Dependency-free component (`window.KhaltronHeader`). Builds the DOM and runs the state machine. |
 | `assets/khaltron-raccoon.jpg` | The robot artwork used in the header (2172×724, 3:1, optimized). |
 | `assets/khaltron-raccoon-original.png` | The original full-quality artwork. |
+| `assets/khaltron-gaming-mode.mp3` / `.wav` | Menacing sound effect (2.4 s) played when gaming mode turns on. The MP3 is for the web; the WAV is lossless. |
 | `screenshots/` | Monitor mode, gaming mode (warning) and gaming mode (frozen). |
 | `reference/design-source.dc.html` | The original design file this was built from (reference only, not runnable on its own). |
 
@@ -36,12 +37,16 @@ Open `index.html` in a browser to see it live. Click **GAMING MODE** (top right)
     onModeChange:  (mode)  => {},     // 'monitor' | 'gaming'
     onPhaseChange: (phase) => {},     // 'watch' | 'sweep' | 'pausing' | 'locked'
     onLocked: (processes) => {},      // sequence finished: actually pause these processes here
+    sound: 'assets/khaltron-gaming-mode.mp3', // played on engage; false = silent
+    volume: 0.8,                      // 0–1
   });
 
   header.setProcesses(list);  // update cards with live data
   header.engage();            // start gaming mode
   header.disengage();         // back to monitor mode
   header.getState();          // { mode, phase, look }
+  header.setVolume(0.5);      // 0–1
+  header.setSoundEnabled(false);
   header.destroy();
 </script>
 ```
@@ -59,7 +64,7 @@ All coordinates below are in that native space.
 - Every card shows "MONITORED".
 
 ### Gaming mode (click the button): plays once, then freezes
-1. **Engage (0 ms):** theme turns red. The scene gets a red color grade and darkens 30%, the camera pushes in 6% toward the eyes and shakes, a red vignette pulses, the eyes turn red with angry dark lids, the beams go solid red with a laser line, and the banner reads "GAMING MODE ENGAGED — ISSUING WARNINGS".
+1. **Engage (0 ms):** the activation sound plays (`assets/khaltron-gaming-mode.mp3`, 2.4 s). It starts with a reverse-swell riser out of a deep rumble (0–0.45 s). At 0.45 s, right as the bar turns red, comes a massive sub-bass drop with a metallic clang. Then a dissonant low "horror brass" blast plays under a distorted robotic growl and a grinding servo screech. It ends with a double heartbeat thump (1.35 s and 1.58 s) and a dark echo tail. The theme turns red. The scene gets a red color grade and darkens 30%, the camera pushes in 6% toward the eyes and shakes, a red vignette pulses, the eyes turn red with angry dark lids, the beams go solid red with a laser line, and the banner reads "GAMING MODE ENGAGED — ISSUING WARNINGS".
 2. **Sweep:** the robot glares at each card in order (0 → 5, left side then right side). For each card: look (380 ms), then the card flashes red and shows "⚠ WARNED", then 260 ms before the next one. The card being looked at lifts up, gets red corner brackets and a blinking "TERMINATE?" badge. Cards it hasn't reached yet show "SCANNING…".
 3. **Pausing (800 ms after the last warning):** the left eye's beam floods the left cards and the right eye's beam floods the right cards. All cards flash and switch to "⏸ PAUSED". The banner reads "ALL NON-ESSENTIAL PROCESSES PAUSED".
 4. **Locked (1.3 s later):** **everything stops.** No shaking, pulsing, flicker or blinking, and the dust freezes in mid-air. It stays red and stares down at the apps until the user exits. `onLocked` fires here, which is where the real app should pause the processes.
@@ -97,4 +102,5 @@ The rest of the app should match: a near-black background, cyan as the single ac
 ## Notes for the developer
 - The app names in the demo are placeholders. Feed real running processes through `setProcesses()`. Only 6 fit, so pick the top 6 by CPU or memory.
 - The card positions are tuned to the artwork, so the hands stay visible. If you swap the artwork, re-measure the eye positions and the hand gaps.
+- Browsers only allow sound after a user action, so the sound plays when the button is clicked. If gaming mode starts on its own (`startInGamingMode` or calling `engage()` without a click), the browser may stay silent. In a desktop wrapper like Electron or Tauri this isn't an issue.
 - The header is purely visual. Actually pausing or terminating processes is up to the app, using the `onLocked` callback.
