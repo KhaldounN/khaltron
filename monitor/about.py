@@ -10,12 +10,10 @@ from . import theme
 AUTHOR = "Khaldoun Alnaierat"
 REPO = "https://github.com/KhaldounN/khaltron"
 STORY = [
-    "I like to analyze things, and I run large, complex analyses on my PC. Many of them run in the background "
-    "for hours, often started with Claude, doing a lot of work while I do something else.",
-    "But when I play games, I want my PC back, so I need to stop all of that first.",
-    "I created Khaltron to give me visibility and control over all these background processes: what is running "
-    "now, what comes next, what it costs my PC, and one click to freeze it all for a game and bring it back after.",
-    "Have fun with it. I'm happy for other people to use it: it's free and open source (MIT licence).",
+    "I run big, complex analyses on my PC, often with Claude, and they keep working in the background for hours.",
+    "When I play games, I want that power back. Khaltron shows me everything running in the background, lets me "
+    "pause it all with one click, and picks up where it left off when I'm done.",
+    "Have fun with it. It's free and open source (MIT), and I'm happy for anyone to use it.",
 ]
 
 

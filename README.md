@@ -19,10 +19,10 @@ can still see and control.
 
 ## Why I made it
 
-*By Khaldoun Alnaierat.* I like to analyze things, and I run large, complex analyses on my PC. Many of them run
-in the background for hours, often started with Claude. But when I play games, I want my PC back, so I need to
-stop all of that first. I created Khaltron to give me visibility and control over all these background
-processes. Have fun with it: I'm happy for other people to use it. (It's also the **About** tab in the app.)
+*By Khaldoun Alnaierat.* I run big, complex analyses on my PC, often with Claude, and they keep working in the
+background for hours. When I play games, I want that power back. Khaltron shows me everything running in the
+background, lets me pause it all with one click, and picks up where it left off when I'm done. Have fun with it:
+it's free and open source, and I'm happy for anyone to use it. (It's also the **About** tab in the app.)
 
 ## Features
 
