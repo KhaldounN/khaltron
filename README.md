@@ -1,30 +1,53 @@
 # Khaltron 9000
 
-**A cybernetic sentinel for your background jobs.** Khaltron 9000 is a small Windows desktop app that watches the long-running jobs
-on your PC, the ones that run for hours in the background (data processing, AI model runs, batch scripts), and
-shows you in one dark window, watched over by a mechanical raccoon with glowing eyes:
+**Khaltron 9000 is a free Windows desktop app that keeps an eye on everything running in the background of your
+PC, and hands the PC back to you when you want to play.**
 
-- **what is running now**: what each job is doing, its progress, how long it has run, time left, and its RAM and CPU;
-- **what is queued after it**, and what each waiting job is waiting for;
-- **what finished or failed**, with its log one click away;
-- **how much of your PC is free**: RAM in use (the same numbers as Task Manager), CPU, and how much of that your jobs take;
-- **where all of your PC's power goes**: every program you run (apps, browsers, games) and Windows itself, grouped
-  by program, with its share of the CPU and the RAM.
-
-It also gives you a simple **job queue** (`jobq`): line jobs up and they run one at a time, each when the one it
-waits for is done. So two heavy jobs never fight over your memory, and an AI assistant or a script can queue work you
-can still see and control.
+If you run long jobs on your computer (data analysis, AI model runs, Python scripts, batch work that takes hours),
+it's easy to lose track of what's still going, what's next, and how much of your PC it's eating. Khaltron puts all of
+that in one dark window, watched over by a mechanical raccoon with glowing eyes. And when you sit down to play a
+game, one click (or no click at all, with auto mode) freezes the background work so the game gets the CPU and memory,
+then lets everything carry on where it left off when you're done.
 
 ![Khaltron 9000's Overview: a one-line briefing, RAM / CPU / jobs cards, the running jobs, what is next, and where the PC's power goes](assets/screenshot.png)
 
+## Features at a glance
+
+**See what's going on**
+- **Running jobs**: what each one is doing, its progress, its RAM and CPU, and **how long it has left** ("done ~3:05 am").
+- **What's next**: the queue of waiting jobs, and what each one is waiting for.
+- **What finished or failed**, with its log one click away.
+- **Your PC's health**: RAM and CPU like Task Manager shows them, and how much of that your jobs take.
+- **Every program on your PC**, grouped by app, with its share of the CPU and RAM.
+- **Startup apps**: what starts when you log in and what it costs you.
+
+**Take control**
+- **Pause, resume, close or end** any of your programs (Windows' own parts are never offered).
+- **Turn startup apps on or off**, the same way Task Manager does.
+- **Stop, reorder or remove jobs**, and **queue new ones** with `jobq`, so heavy jobs run one at a time instead of
+  fighting over memory.
+- Every action asks "Are you sure?" first, and important programs are protected from being stopped.
+
+**Gaming mode**
+- **One click** (or Ctrl+Alt+G) freezes your background jobs, heavy Python scripts and safe background apps (cloud
+  sync, widgets...), sets Windows to Best performance, and puts it all back when you're done.
+- **Auto gaming mode**: switches itself on when a game starts and off when it closes (with its own on/off switch).
+- A little show in the top bar: the raccoon's eyes turn red and it locks onto each app it pauses.
+
+**Stays out of your way**
+- Lives in the tray by the clock and can start with Windows.
+- Windows notifications when a job starts, finishes or fails, or memory runs low.
+- Light: one quick look at all processes every 2 seconds; the window uses about 1% of the CPU.
+
 ## Why I made it
 
-*By Khaldoun Alnaierat.* I run big, complex analyses and Python jobs on my PC, often with Claude, and they keep
-working in the background for hours. That's why I need Khaltron. When I play games, I want that power back. Khaltron shows me everything running in the
-background, lets me pause it all with one click, and picks up where it left off when I'm done. Have fun with it:
-it's free and open source, and I'm happy for anyone to use it. (It's also the **About** tab in the app.)
+*By Khaldoun Alnaierat.* I usually have something going on in the background: big analyses and Python jobs, mostly
+built with Claude's help, that can run for hours. But when I sit down to play a game, I'd like my PC back. So I made
+Khaltron. It shows me what's running, pauses it all with one click, and lets everything carry on where it left off
+once I'm done. It's just a small side project, free and open source (MIT). If it's useful to you too, feel free to
+use it, change it, and have fun with it. (This is also the **About** tab in the app.)
 
-## Features
+## Features in detail
 
 - **Two views.** *Overview* (the default) is the whole picture at a glance: a one-sentence briefing with a status
   chip (CALM, WORKING, BUSY, LOW MEMORY, GAMING), the RAM / CPU / jobs cards, the running jobs, the next three
@@ -62,7 +85,8 @@ it's free and open source, and I'm happy for anyone to use it. (It's also the **
   side (PAUSED), then locks still. At that moment the jobs are really frozen. Cards it doesn't pause
   (your browser...) honestly say SPARED. The design package it follows is in `design/khaltron-header/`.
 - **Gaming mode**: one click on the header's GAMING MODE button (or Ctrl+Alt+G) freezes every background job, any other
-  heavy Python script of yours and safe background apps (OneDrive by default) so a game gets the CPU and memory,
+  heavy Python script of yours and safe background apps (cloud sync, Widgets, Phone Link...) so a game gets the
+  CPU and memory,
   and puts everything back when you switch it off. A pop-up says what was frozen and how much memory it freed.
 - **Light on your PC**: one Windows call per refresh reads every process (~55 ms), and the animations slow down
   when another window has the focus and stop in the tray. The window itself uses about 1% of the CPU.
