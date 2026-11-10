@@ -7,6 +7,7 @@ import re
 import time
 from pathlib import Path
 
+from .. import eta
 from ..model import RUNNING, WAITING, Job
 from ..util import tail
 from . import pretty_book
@@ -65,10 +66,14 @@ def read(book_root: Path, procs: dict, slow: bool) -> tuple[list[Job], list[Job]
     left = not_ready(book_root, 0 if slow and not _ready[0] else 60)
     total = len(list((book_root / "data").glob("*.txt")))
     done = total - len(left)
+    try:  # time left: the recent books' speed, times what is left to read (monitor/eta.py)
+        minutes = eta.library_minutes(tail(log, 60), [p.stat().st_size / 1024 for p in left])
+    except (OSError, ValueError):
+        minutes = None
     running = [Job(id="lib:run", name="Library pre-analysis", source="Library", state=RUNNING,
                    step=f"{done} of {total} books ready. Now: {last}", progress=done / total if total else None,
                    started=process.started, pid=process.pid, log=str(log),
-                   memory_mb=tree_memory(process.pid, procs), actions=["stop", "log"])]
+                   memory_mb=tree_memory(process.pid, procs), actions=["stop", "log"], eta_minutes=minutes)]
     waiting = []
     queued = [p for p in left if p.name != current]
     for path in queued[:SHOWN]:

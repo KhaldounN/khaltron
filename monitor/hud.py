@@ -161,7 +161,15 @@ class JobCard(tk.Frame):
         self._set(self.name, text=job.name)
         self._set(self.step, text=" ".join(str(job.step).split())[:160] or "working...")
         ran = duration(now - job.started) if job.started else ""
-        left = f"  ·  ~{duration(job.eta_minutes * 60)} left" if job.eta_minutes else ""
+        left = ""
+        if job.eta_minutes:  # e.g. "~9 h 10 min left, done ~3:05 am"
+            ends = time.localtime(now + job.eta_minutes * 60)
+            if ends.tm_yday == time.localtime(now).tm_yday:
+                day = ""
+            else:
+                day = " tomorrow" if job.eta_minutes < 36 * 60 else f" {time.strftime('%a', ends)}"
+            clock = time.strftime("%I:%M %p", ends).lstrip("0").lower()
+            left = f"  ·  ~{duration(job.eta_minutes * 60)} left, done ~{clock}{day}"
         self._set(self.times, text=f"{ran}{left}")
         cpu = f"{job.cpu:.0f}%" if job.cpu is not None else "-"
         self._set(self.stats, text=f"RAM {gb(job.memory_mb):>7}\nCPU {cpu:>7}")

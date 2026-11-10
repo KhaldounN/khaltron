@@ -85,6 +85,10 @@ def collect(slow: bool = False) -> State:
 
     # the library job's current book also shows as a main analysis: keep both (the library row shows the count)
     state.running = main[0] + stage2[0] + library[0] + plan[0]
+    from . import eta
+    for job in state.running:  # time left, for jobs that say how far they are and have no better estimate
+        if job.eta_minutes is None:
+            job.eta_minutes = eta.from_progress(job.progress, job.started)
     # what the jobs use: per job (with its children), and all together with no process counted twice (the
     # library job's worker is also listed as its own book analysis)
     counted: set[int] = set()
