@@ -8,7 +8,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import actions, alerts, gaming, planned, runner, theme
+from . import actions, alerts, autogame, gaming, planned, runner, theme
 from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
 from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
@@ -166,6 +166,8 @@ class App:
         self.alerts_on = True
         self.hidden_once = False
         self.gaming_was = None  # gaming mode at the last refresh (a change pops up a notification)
+        self.switched_at = 0.0  # when Khaltron itself last switched gaming mode (it says so in its own pop-up)
+        self.autogame = autogame.Watcher()
         root.title(theme.NAME)
         # tall enough for the header; never taller than the screen (a laptop's is ~1080 px with the taskbar)
         root.geometry(f"1180x{min(1010, root.winfo_screenheight() - 70)}+40+10")
@@ -218,6 +220,10 @@ class App:
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
+        # auto gaming mode: gaming mode switches itself on when a game starts, off when it closes
+        self.auto_var = tk.BooleanVar(value=autogame.enabled())
+        ttk.Checkbutton(top, text="Auto gaming mode", variable=self.auto_var,
+                        command=lambda: self.set_auto_gaming(self.auto_var.get())).pack(side="right", padx=(6, 0))
         # the one-sentence briefing shares this row (one row less under the header)
         self.briefing = Briefing(top, compact=True)
         self.briefing.pack(side="left", fill="x", expand=True, padx=(14, 8))
@@ -324,9 +330,17 @@ class App:
             except Exception as error:  # noqa: BLE001
                 self.results.put(("message", f"Gaming mode check failed: {error}"))
             try:
-                self.results.put(("state", collect(slow)))
+                state = collect(slow)
             except Exception as error:  # noqa: BLE001
                 self.results.put(("message", f"Reading failed: {error}"))
+            else:
+                try:  # auto gaming mode: a game started or closed?
+                    for note in self.autogame.tick(state.samples):
+                        self.switched_at = time.time()
+                        self.results.put(("notify", note))
+                except Exception as error:  # noqa: BLE001
+                    self.results.put(("message", f"Auto gaming mode check failed: {error}"))
+                self.results.put(("state", state))
             self.wake.wait(CONFIG["refresh_seconds"])
             self.wake.clear()
 
@@ -347,6 +361,8 @@ class App:
                     self.gaming_switch.set_state(gaming.is_on(), busy=False)
                 elif kind == "gaming":
                     self.toggle_gaming()
+                elif kind == "auto_gaming":
+                    self.set_auto_gaming(not autogame.enabled())
                 elif kind == "show":
                     self.show()
                 elif kind == "quit":
@@ -385,7 +401,7 @@ class App:
             self.gaming_switch.set_state(playing)
         if playing:
             flags.append("GAMING MODE is on: background jobs are frozen (Start / control > Gaming mode off).")
-        if playing != self.gaming_was and self.gaming_was is not None and self.tray:
+        if playing != self.gaming_was and self.gaming_was is not None and self.tray and                 time.time() - self.switched_at > 20:  # switched elsewhere (hotkey, Claude): Khaltron's own say so
             self.tray.notify("Gaming mode " + ("ON" if playing else "OFF"),
                              "Background jobs frozen, voice off. Have fun!" if playing else "Background jobs carry on.")
         self.gaming_was = playing
@@ -465,7 +481,15 @@ class App:
         if gaming.is_on():
             self._switch_gaming(gaming.turn_off)
 
+    def set_auto_gaming(self, on: bool):
+        """The toolbar's and the tray's switch for auto gaming mode (remembered in state/auto_gaming.json)."""
+        autogame.set_enabled(on)
+        self.auto_var.set(on)
+        self.status.configure(text="Auto gaming mode ON: gaming mode switches on when a game starts, off when it "
+                                   "closes." if on else "Auto gaming mode OFF: gaming mode only when you switch it.")
+
     def _switch_gaming(self, switch):
+        self.switched_at = time.time()
         self.header.set_state(gaming.is_on(), busy=True)
 
         def do():
@@ -489,6 +513,7 @@ class App:
         The switch shows SWITCHING... meanwhile; afterwards a pop-up says what was frozen and what it freed."""
         if self.gaming_switch.busy:
             return
+        self.switched_at = time.time()
         self.gaming_switch.set_state(gaming.is_on(), busy=True)
 
         def do():

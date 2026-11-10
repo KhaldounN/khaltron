@@ -223,11 +223,13 @@ def free_memory_gb() -> float:
     return psutil.virtual_memory().available / 2 ** 30
 
 
-def _turn_on() -> str:
+def _turn_on(auto: dict | None = None) -> str:
     if is_on():
         return "Gaming mode is already ON.\n" + status()
     before = free_memory_gb()
     state = {"since": time.time(), "frozen": [], "queue_was_paused": planned.queue_paused(), "power_before": None}
+    if auto:  # switched on by auto mode for this game (autogame.py): it switches off again when the game closes
+        state["auto"] = auto
     # the flag goes first, so the voice can't start again and the monitor freezes any job that starts meanwhile
     write_json(FLAG, state)
     lines = ["Gaming mode ON."]
@@ -301,9 +303,9 @@ def toggle() -> str:
         return _turn_off() if is_on() else _turn_on()
 
 
-def turn_on() -> str:
+def turn_on(auto: dict | None = None) -> str:
     with _locked() as got:
-        return _turn_on() if got else "Gaming mode is busy switching; try again in a moment."
+        return _turn_on(auto) if got else "Gaming mode is busy switching; try again in a moment."
 
 
 def turn_off() -> str:

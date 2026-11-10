@@ -25,6 +25,7 @@ class State:
     jobs_mb: float = 0.0    # RAM used by every running job together (each process counted once)
     jobs_cpu: float = 0.0   # their CPU, percent of the whole CPU
     programs: list = field(default_factory=list)  # every program on the PC (sources/programs.py), busiest first
+    samples: dict = field(default_factory=dict)   # this refresh's process sample (pid -> programs.Sample)
     taken: float = 0.0
 
 
@@ -45,7 +46,7 @@ def collect(slow: bool = False) -> State:
             return None
 
     # ONE look at every process for this refresh, shared by every reader below
-    taken = attempt("process sample", programs.sample) or {}
+    taken = state.samples = attempt("process sample", programs.sample) or {}
     procs = attempt("processes", lambda: processes.snapshot(taken)) or {}
     state.health = attempt("health", health_source.read)
     state.programs = attempt("programs", lambda: programs.read(taken)) or []

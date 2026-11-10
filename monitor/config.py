@@ -36,6 +36,11 @@ DEFAULTS = {
         "PhoneExperienceHost.exe": "Phone Link",
     },
     "gaming_python_mb": 200,
+    # auto gaming mode (its switch is in the toolbar and the tray; this is only its first setting) and extra game
+    # programs to recognise by name, for games outside the usual game folders (Steam, Epic, Xbox, GOG...)
+    "auto_gaming": True,
+    "games": [],
+    "not_games": [],  # program or folder names that look like games but are not (never switch for these)
     # gaming mode also pauses (freezes) the Book Analyzer website; it carries on when gaming mode ends
     "gaming_pause_website": True,
     # the activation sound when gaming mode turns on (assets/khaltron-gaming-mode.wav) and its volume (0-1)

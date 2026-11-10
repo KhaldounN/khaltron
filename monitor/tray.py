@@ -3,7 +3,7 @@ pystray runs in its own thread; its menu clicks are passed to the window through
 
 from PIL import Image, ImageDraw
 
-from . import gaming, theme
+from . import autogame, gaming, theme
 
 
 def icon_image(size: int = 64) -> Image.Image:
@@ -19,6 +19,8 @@ class Tray:
             pystray.MenuItem(f"Show {theme.NAME}", lambda: self.results.put(("show", None)), default=True),
             pystray.MenuItem("Gaming mode", lambda: self.results.put(("gaming", None)),
                              checked=lambda _: gaming.is_on()),
+            pystray.MenuItem("Auto gaming mode (when a game starts)", lambda: self.results.put(("auto_gaming", None)),
+                             checked=lambda _: autogame.enabled()),
             pystray.MenuItem("Alerts", self.toggle_alerts, checked=lambda _: self.app_ref().alerts_on),
             pystray.MenuItem("Quit", lambda: self.results.put(("quit", None))),
         )
