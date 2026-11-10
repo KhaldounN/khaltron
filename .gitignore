@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 config.json
 *.zip
+
+# Adobe Stock preview photo (watermarked): not ours to redistribute, never push
+assets/about-raccoon.jpg

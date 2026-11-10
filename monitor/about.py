@@ -3,7 +3,7 @@
 import tkinter as tk
 import webbrowser
 
-from PIL import ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
 from . import theme
 
@@ -19,6 +19,30 @@ STORY = [
 ]
 
 
+PORTRAIT = theme.ASSETS / "about-raccoon.jpg"  # the owner's photo (2026-11-10); gitignored: stock, not ours to share
+
+
+def portrait(size: int) -> Image.Image:
+    """The raccoon-in-glasses photo, cropped square around its face, in the logo's rounded frame with a thin
+    cyan border. Without the photo (e.g. a copy from GitHub) it shows the usual Khaltron logo instead."""
+    if not PORTRAIT.exists():
+        return theme.logo(size)
+    photo = Image.open(PORTRAIT).convert("RGB")
+    w, h = photo.size
+    side = int(h * 0.82)                                   # ears to chest
+    cx, top = int(w * 0.49), int(h * 0.12)                # the face sits a bit left of centre
+    face = photo.crop((cx - side // 2, top, cx + side // 2, top + side))
+    big = size * 4
+    face = face.resize((big, big), Image.LANCZOS)
+    mask = Image.new("L", (big, big), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, big - 1, big - 1), radius=big // 5, fill=255)
+    canvas = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    canvas.paste(face, (0, 0), mask)
+    ImageDraw.Draw(canvas).rounded_rectangle((1, 1, big - 2, big - 2), radius=big // 5,
+                                            outline=theme.LASER, width=max(2, big // 40))
+    return canvas.resize((size, size), Image.LANCZOS)
+
+
 class AboutPage(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent, bg=theme.BG)
@@ -26,7 +50,7 @@ class AboutPage(tk.Frame):
         card.pack(fill="x", padx=2, pady=(6, 0))
         inner = tk.Frame(card, bg=theme.PANEL)
         inner.pack(fill="x", padx=24, pady=22)
-        self.logo = ImageTk.PhotoImage(theme.logo(112))
+        self.logo = ImageTk.PhotoImage(portrait(160))
         tk.Label(inner, image=self.logo, bg=theme.PANEL).pack(side="left", anchor="n", padx=(0, 24))
         words = tk.Frame(inner, bg=theme.PANEL)
         words.pack(side="left", fill="x", expand=True)
