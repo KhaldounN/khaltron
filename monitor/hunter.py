@@ -43,17 +43,17 @@ NATIVE_W, NATIVE_H = 1920, 180   # the design's thin top bar (10.7:1): ~110 px t
 VIEW_W = NATIVE_W
 OFFSET = 0
 CYAN, RED = "#35E0FF", "#FF3B3B"
-EYES = [(931, 94), (987, 91)]
-CAM = (959, 92)           # the push-in's origin
-ART_BOX = (570, 0, 780, 260)  # the artwork's left, top, width, height (the bar's bottom edge crops it at the chest)
+EYES = [(933.3, 82.2), (985.6, 82.7)]   # measured on the banner art (its glowing eyes at 1044,348 / 1138,349)
+CAM = (959, 82)           # the push-in's origin
+ART_BOX = (357, 0, 1199, 180)  # the artwork's left, top, width, height: the whole banner, its ledge on the bar's edge
 SLOTS = [28, 188, 348, 1422, 1582, 1742]                     # three cards left of the robot, three right
 CARD_TOP, CARD_W, CARD_H = 112, 150, 50
 ANGLES = [87, 86.3, 85.2, -85.2, -86.3, -87]                 # beam rotation per card (degrees, CSS rotate)
 PUPIL = [(-2.5, .6), (-2.2, .6), (-2, .6), (2, .6), (2.2, .6), (2.5, .6)]
 DOWN = "c"                # "look-c": each eye floods its own side (left beam the left cards, right beam the right)
 DOWN_ANGLES, DOWN_SCALE = (86, -86), 7.0
-LIDS = [[(917, 80), (946.4, 80), (946.4, 92.6), (917, 85.2)],
-        [(972.7, 78.2), (1001.9, 78.2), (1001.9, 83.4), (972.7, 90.6)]]
+LIDS = [[(919.3, 68.2), (948.7, 68.2), (948.7, 80.8), (919.3, 73.4)],
+        [(971.3, 69.9), (1000.5, 69.9), (1000.5, 75.1), (971.3, 82.3)]]
 EYE = {"glow": 10.5, "dark": 5.7, "ring": 4.5, "ring_w": 1.4, "pupil": 2.6, "spark": 1.2}
 BEAM = {"start": 4, "length": 1000, "half": 20, "laser_from": 8, "laser_to": 966}
 TIMING = {"idleStep": 1800, "firstIdle": 1200, "sweepStart": 450, "lookToWarn": 380, "warnToNext": 260,
@@ -61,7 +61,8 @@ TIMING = {"idleStep": 1800, "firstIdle": 1200, "sweepStart": 450, "lookToWarn": 
 STATUS = {"monitored": ("● MONITORED", "#7FE9FF"), "scanning": ("SCANNING…", "#C2AEAE"),
           "warned": ("⚠ WARNED", "#FF7A7A"), "paused": ("❚❚ PAUSED", "#FFB3B3"),
           "spared": ("○ SPARED", "#9AA6B2")}
-ART = HOME / "assets" / "khaltron-raccoon.jpg"
+ART = HOME / "assets" / "khaltron-banner.jpg"  # the owner's banner (2026-11-10), its black bars cut off;
+# khaltron-raccoon.jpg (the first artwork) still makes the logo and icon (theme.logo)
 CATEGORIES = [("chrome", "BROWSER"), ("edge", "BROWSER"), ("firefox", "BROWSER"), ("brave", "BROWSER"),
               ("opera", "BROWSER"), ("python", "JOBS"), ("claude", "AI"), ("discord", "CHAT"), ("slack", "CHAT"),
               ("teams", "MEETINGS"), ("zoom", "MEETINGS"), ("outlook", "MAIL"), ("spotify", "MUSIC"),
@@ -104,7 +105,7 @@ def _native_scene(hunt: bool) -> Image.Image:
         mask = Image.new("L", (VIEW_W, NATIVE_H), 255)
         mask.paste(radial.point(lambda v: min(255, int(v / .60))), (left, top))
         img = Image.composite(Image.new("RGB", mask.size, "#07080A"), Image.new("RGB", mask.size, "#15181D"), mask)
-        # the artwork: 780 x 260 at (570, 0), cropped at the chest by the bar's edge, outer 14% faded into the dark
+        # the artwork: 1199 x 180 at (357, 0), the robot on its ledge, outer 14% faded into the dark
         if ART.exists():
             ax, ay, aw, ah = ART_BOX
             art = Image.open(ART).convert("RGB").resize((aw, ah), Image.LANCZOS)
