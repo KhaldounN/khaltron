@@ -34,7 +34,20 @@ it's free and open source, and I'm happy for anyone to use it. (It's also the **
   glowing progress bars, their RAM and CPU, and their own buttons.
 - **Programs on this PC**: everything running, grouped by program (Chrome's 30 processes are one row). It reads every
   process in one Windows call (as Task Manager does), so it costs a few milliseconds. What no program owns (drivers,
-  interrupts, kernel and cache memory) gets its own row, so the totals add up. Watch-only: nothing there can be stopped.
+  interrupts, kernel and cache memory) gets its own row, so the totals add up. Select one of *your* programs to
+  **Pause** it (its windows freeze, nothing is lost), **Resume** it, **Close** it (like clicking its X) or **End** it
+  now. Windows' own parts, services, Claude and its terminal, antivirus and the graphics driver are never offered,
+  and the Note column says why.
+- **Startup apps**: everything that starts when you log in, whether it's on, and the RAM it uses right now, with a
+  switch to turn each one off or on for the next login. It uses the same on/off flags as Task Manager's Startup apps
+  (nothing is deleted); entries set for every user ask for administrator permission.
+- **Time left**: running jobs show roughly how long they have left and when they should be done ("~9 h 10 min left,
+  done ~3:05 am"), from how fast they have gone so far.
+- **Auto gaming mode** (the *Auto gaming mode* checkbox, or the tray menu): when a game starts, gaming mode turns
+  itself on; when the game closes, off again. Games are recognised by their folder (Steam, Epic, Xbox, GOG, Riot,
+  EA, Ubisoft...) or by filling the screen for 8 seconds (never a browser, video player or slide show). It only
+  switches off what it switched on, and if you turn gaming mode off mid-game it leaves that game alone. Settings:
+  `games` (extra game programs to recognise) and `not_games` (ones to ignore).
 - **Live view**, refreshed every 2 seconds. It only *reads* status files and process info, so it never slows a job down.
 - **Planned queue**: `jobq add --name "..." --after previous -- python my_script.py`. A small runner process starts the
   jobs in order and keeps going when the window is closed.

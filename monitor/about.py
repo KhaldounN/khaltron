@@ -10,11 +10,12 @@ from . import theme
 AUTHOR = "Khaldoun Alnaierat"
 REPO = "https://github.com/KhaldounN/khaltron"
 STORY = [
-    "I run big, complex analyses and Python jobs on my PC, often with Claude, and they keep working in the "
-    "background for hours. That's why I need Khaltron.",
-    "When I play games, I want that power back. Khaltron shows me everything running in the background, lets me "
-    "pause it all with one click, and picks up where it left off when I'm done.",
-    "Have fun with it. It's free and open source (MIT), and I'm happy for anyone to use it.",
+    "I usually have something going on in the background: big analyses and Python jobs, mostly built with "
+    "Claude's help, that can run for hours.",
+    "But when I sit down to play a game, I'd like my PC back. So I made Khaltron. It shows me what's running, "
+    "pauses it all with one click, and lets everything carry on where it left off once I'm done.",
+    "It's just a small side project, free and open source (MIT). If it's useful to you too, feel free to use it, "
+    "change it, and have fun with it.",
 ]
 
 
