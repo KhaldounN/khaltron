@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 
-from . import planned, protect, runner
+from . import appcontrol, planned, protect, runner
 from .config import BOOK
 from .model import Job
 from .sources import book_stage2
@@ -14,6 +14,7 @@ from .util import NO_WINDOW, detached, read_json, write_json
 LABELS = {
     "stop": "Stop", "pause2": "Pause stage 2", "resume2": "Resume stage 2", "log": "Open log", "folder": "Open folder",
     "up": "Move up", "down": "Move down", "remove": "Remove", "runnow": "Run next", "runtask": "Run task now",
+    "pause_app": "Pause", "resume_app": "Resume", "close_app": "Close", "end_app": "End now",
 }
 HARMLESS = {"log", "folder"}
 
@@ -45,6 +46,19 @@ def question(job: Job, action: str) -> str:
         return f"Run {name} next?\n\nIt moves to the front of its queue.{extra}"
     if action == "runtask":
         return f"Run the scheduled task {name} now?"
+    count = len(job.ref.get("allowed", []))
+    processes = f"its {count} process{'es' if count != 1 else ''}"
+    if action == "pause_app":
+        return (f"Pause {name}?\n\n{processes.capitalize()} stop using the CPU and Windows moves their memory out "
+                "of RAM. Its windows freeze (they look stuck) until you press Resume. Nothing is lost.")
+    if action == "resume_app":
+        return f"Resume {name}?\n\nIt carries on where it stopped."
+    if action == "close_app":
+        return (f"Close {name}?\n\nLike clicking its X: it may ask you to save first. Background programs without a "
+                "window may ignore this; use 'End now' for those.")
+    if action == "end_app":
+        return (f"End {name} now?\n\n{processes.capitalize()} end at once, like Task Manager's End task. "
+                "Unsaved work in it is LOST.")
     return f"{LABELS.get(action, action)} {name}?"
 
 
@@ -56,6 +70,11 @@ def do(job: Job, action: str) -> str:
     if action == "folder":
         os.startfile(job.folder)
         return "Folder opened."
+    if action.endswith("_app"):
+        pids = job.ref.get("allowed", [])
+        return {"pause_app": lambda: appcontrol.pause(job.name, pids), "resume_app": lambda: appcontrol.resume(job.name),
+                "close_app": lambda: appcontrol.close(job.name, pids),
+                "end_app": lambda: appcontrol.end(job.name, pids)}[action]()
     if job.source == "Planned":
         return _planned(job, action)
     if job.source == "Stage 2":

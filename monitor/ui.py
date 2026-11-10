@@ -14,7 +14,7 @@ from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
 from .collect import State, collect
 from .config import BOOK, CONFIG, HAS_BOOK
-from .model import DONE, FAILED, RUNNING, STOPPED, WAITING, Job
+from .model import DONE, FAILED, PAUSED, RUNNING, STOPPED, WAITING, Job
 from .util import duration, read_json, when
 
 GREEN, AMBER, RED, GREY = theme.GREEN, theme.AMBER, theme.RED, theme.MUTED
@@ -56,12 +56,17 @@ def share_bar(share: float, width: int = 10) -> str:
     return f"{share * 100:4.1f}%  " + "\u25ae" * full + "\u25af" * (width - full)
 
 
-def program_row(program) -> Job:
-    """A Programs-section row (sources/programs.py) in the shape the tables show."""
+def program_row(program, control=None) -> Job:
+    """A Programs-section row (sources/programs.py) in the shape the tables show, with the buttons it allows
+    (monitor/appcontrol.py decides: never Windows' own parts, Claude, or Khaltron's protected programs)."""
     windows = not program.yours
+    allowed = control.allowed if control else []
+    paused = bool(control and control.paused)
+    actions_ = (["resume_app", "end_app"] if paused else ["pause_app", "close_app", "end_app"]) if allowed else []
     return Job(id=f"app:{program.name}", name=program.name, source="Windows" if windows else "You",
-               state=DONE if windows else WAITING, cpu=program.cpu, memory_mb=program.memory_mb,
-               ref={"count": program.processes or ""})
+               state=PAUSED if paused else DONE if windows else WAITING, cpu=program.cpu, memory_mb=program.memory_mb,
+               actions=actions_, step="" if allowed or windows else (control.reason if control else ""),
+               ref={"count": program.processes or "", "allowed": allowed})
 
 
 def pct(value: float | None) -> str:
@@ -95,7 +100,7 @@ class Table(ttk.Frame):
         for key, title, width in columns:
             self.tree.heading(key, text=title, anchor="w")
             self.tree.column(key, width=width, minwidth=40, stretch=key in ("name", "step"), anchor="w")
-        for state, colour in ((RUNNING, GREEN), (FAILED, RED), ("ended", AMBER), (STOPPED, AMBER),
+        for state, colour in ((RUNNING, GREEN), (FAILED, RED), ("ended", AMBER), (STOPPED, AMBER), (PAUSED, AMBER),
                               (WAITING, theme.TEXT), (DONE, GREY), ("protected", GREY)):
             self.tree.tag_configure(state, foreground=colour)
         self.tree.tag_configure("odd", background="#0d1320")  # every other row a shade darker
@@ -279,7 +284,8 @@ class App:
         tabs = ttk.Notebook(panes)
         self.apps = Table(tabs, self, [("name", "Program", 300), ("who", "Started by", 90), ("count", "Processes", 80),
                                        ("cpu", "CPU", 60), ("share", "Share of the CPU", 170), ("memory", "RAM", 80),
-                                       ("rshare", "Share of the RAM", 170)], [], height=8)
+                                       ("rshare", "Share of the RAM", 170), ("step", "Note", 200)],
+                          ["pause_app", "resume_app", "close_app", "end_app"], height=8)
         self.finished = Table(tabs, self, [("name", "Job", 270), ("source", "From", 110), ("state", "Result", 80),
                                            ("step", "Details", 380), ("when", "Ended", 90)], ["log"], height=8)
         self.tasks = Table(tabs, self, [("name", "Task", 250), ("state", "State", 80), ("step", "Status", 330),
@@ -409,6 +415,9 @@ class App:
             flags.append("Stage 2 is paused (Start / control > Resume stage 2).")
         if state.queue_paused:
             flags.append("The planned queue is paused (Start / control > Resume the planned queue).")
+        paused_apps = [name for name, c in state.controls.items() if c.paused]
+        if paused_apps:
+            flags.append(f"Paused by you: {', '.join(paused_apps)} (Details > Programs on this PC > Resume).")
         if h and h.free_mb < CONFIG["low_memory_mb"]:
             flags.append("Memory is low: a new job may be ended by Windows.")
         self.flags.configure(text="   ".join(flags))
@@ -427,9 +436,10 @@ class App:
         self.running_title.count(len(state.running))
         self.waiting_title.count(len(state.waiting))
         total_mb = h.total_mb if h else 1
-        self.apps.show([program_row(a) for a in state.programs], lambda i, j: (
-            j.name, j.source, j.ref["count"], pct(j.cpu), share_bar(j.cpu / 100), gb(j.memory_mb),
-            share_bar(j.memory_mb / total_mb)))
+        self.apps.show([program_row(a, state.controls.get(a.name)) for a in state.programs], lambda i, j: (
+            j.name + ("  (PAUSED)" if j.state == PAUSED else ""), j.source, j.ref["count"], pct(j.cpu),
+            share_bar(j.cpu / 100), gb(j.memory_mb), share_bar(j.memory_mb / total_mb),
+            "paused by you" if j.state == PAUSED else ("can't touch: " + j.step if j.step else "")))
         self.waiting.show(state.waiting, lambda i, j: (
             i + 1, j.name, j.source, j.step, when(j.started)))
         history = sorted(state.finished + alerts.history(), key=lambda j: j.finished or 0, reverse=True)[:40]

@@ -4,7 +4,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 
-from . import planned
+from . import appcontrol, planned
 from .config import BOOK, CONFIG
 from .model import Job
 from .sources import book_library, book_main, book_stage2, processes, programs, scheduled
@@ -26,6 +26,7 @@ class State:
     jobs_cpu: float = 0.0   # their CPU, percent of the whole CPU
     programs: list = field(default_factory=list)  # every program on the PC (sources/programs.py), busiest first
     samples: dict = field(default_factory=dict)   # this refresh's process sample (pid -> programs.Sample)
+    controls: dict = field(default_factory=dict)  # program name -> appcontrol.Control (what its buttons may do)
     taken: float = 0.0
 
 
@@ -63,6 +64,8 @@ def collect(slow: bool = False) -> State:
                                                    ram_left, False, []))
         state.programs.sort(key=lambda a: (-round(a.cpu, 1), -a.memory_mb))
     state.processes = attempt("processes", lambda: processes.rows(procs)) or []
+    state.controls = attempt("program controls", lambda: appcontrol.controls(
+        state.programs, taken, programs.my_session())) or {}
 
     # running first: the book analysis, then stage 2, the library job, and planned jobs
     # the Book Analyzer's own jobs, only when that project is there (config.json "book_analyzer")
