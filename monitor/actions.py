@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 
-from . import appcontrol, planned, protect, runner
+from . import appcontrol, planned, protect, runner, startup
 from .config import BOOK
 from .model import Job
 from .sources import book_stage2
@@ -15,6 +15,7 @@ LABELS = {
     "stop": "Stop", "pause2": "Pause stage 2", "resume2": "Resume stage 2", "log": "Open log", "folder": "Open folder",
     "up": "Move up", "down": "Move down", "remove": "Remove", "runnow": "Run next", "runtask": "Run task now",
     "pause_app": "Pause", "resume_app": "Resume", "close_app": "Close", "end_app": "End now",
+    "startup_off": "Don't start at login", "startup_on": "Start at login",
 }
 HARMLESS = {"log", "folder"}
 
@@ -46,6 +47,14 @@ def question(job: Job, action: str) -> str:
         return f"Run {name} next?\n\nIt moves to the front of its queue.{extra}"
     if action == "runtask":
         return f"Run the scheduled task {name} now?"
+    if action in ("startup_off", "startup_on"):
+        admin = ("\n\nThis one is set for every user of the PC, so Windows will ask for administrator permission."
+                 if getattr(job.ref.get("app"), "needs_admin", False) else "")
+        if action == "startup_off":
+            return (f"Stop {name} starting when you log in?\n\nIt stays installed and you can still open it yourself; "
+                    "if it's running now it keeps running. Switch it back on here or in Task Manager's Startup apps."
+                    + admin)
+        return f"Start {name} when you log in?" + admin
     count = len(job.ref.get("allowed", []))
     processes = f"its {count} process{'es' if count != 1 else ''}"
     if action == "pause_app":
@@ -70,6 +79,8 @@ def do(job: Job, action: str) -> str:
     if action == "folder":
         os.startfile(job.folder)
         return "Folder opened."
+    if action in ("startup_off", "startup_on"):
+        return startup.set_on(job.ref["app"], action == "startup_on")
     if action.endswith("_app"):
         pids = job.ref.get("allowed", [])
         return {"pause_app": lambda: appcontrol.pause(job.name, pids), "resume_app": lambda: appcontrol.resume(job.name),

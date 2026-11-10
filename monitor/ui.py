@@ -8,7 +8,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import actions, alerts, autogame, gaming, planned, runner, theme
+from . import actions, alerts, autogame, gaming, planned, runner, startup, theme
 from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
 from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
@@ -67,6 +67,13 @@ def program_row(program, control=None) -> Job:
                state=PAUSED if paused else DONE if windows else WAITING, cpu=program.cpu, memory_mb=program.memory_mb,
                actions=actions_, step="" if allowed or windows else (control.reason if control else ""),
                ref={"count": program.processes or "", "allowed": allowed})
+
+
+def startup_row(app, memory_mb) -> Job:
+    """A Startup-apps row (monitor/startup.py): on (green) or off (grey), and the button that switches it."""
+    return Job(id=f"start:{app.hive}:{app.approved}:{app.name}", name=startup.label(app), source=app.where,
+               state=RUNNING if app.on else DONE, memory_mb=memory_mb, step=app.command,
+               actions=["startup_off"] if app.on else ["startup_on"], ref={"app": app})
 
 
 def pct(value: float | None) -> str:
@@ -293,9 +300,13 @@ class App:
         self.procs = Table(tabs, self, [("name", "Process", 250), ("pid", "PID", 70), ("memory", "Memory", 80),
                                         ("cpu", "CPU", 60), ("time", "Running for", 90), ("step", "Command", 380)],
                            ["stop"], height=8)
+        self.startup = Table(tabs, self, [("name", "App", 250), ("state", "At login", 90), ("where", "Set in", 190),
+                                          ("memory", "Running now", 100), ("step", "Starts", 420)],
+                             ["startup_off", "startup_on"], height=8)
         self.problems = tk.Text(tabs, height=6, wrap="word", font=(theme.MONO, 9), relief="flat", bg=theme.PANEL,
                                 fg=theme.MUTED, insertbackground=theme.LASER, padx=10, pady=8, highlightthickness=0)
         tabs.add(self.apps, text="Programs on this PC")
+        tabs.add(self.startup, text="Startup apps")
         tabs.add(self.finished, text="Finished")
         tabs.add(self.tasks, text="Scheduled tasks")
         tabs.add(self.procs, text="Python processes")
@@ -440,6 +451,9 @@ class App:
             j.name + ("  (PAUSED)" if j.state == PAUSED else ""), j.source, j.ref["count"], pct(j.cpu),
             share_bar(j.cpu / 100), gb(j.memory_mb), share_bar(j.memory_mb / total_mb),
             "paused by you" if j.state == PAUSED else ("can't touch: " + j.step if j.step else "")))
+        self.startup.show([startup_row(app, mb) for app, mb in state.startup], lambda i, j: (
+            j.name, "starts" if j.state == RUNNING else "off", j.source,
+            gb(j.memory_mb) if j.memory_mb is not None else "not running", j.step))
         self.waiting.show(state.waiting, lambda i, j: (
             i + 1, j.name, j.source, j.step, when(j.started)))
         history = sorted(state.finished + alerts.history(), key=lambda j: j.finished or 0, reverse=True)[:40]

@@ -4,7 +4,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 
-from . import appcontrol, planned
+from . import appcontrol, planned, startup
 from .config import BOOK, CONFIG
 from .model import Job
 from .sources import book_library, book_main, book_stage2, processes, programs, scheduled
@@ -27,6 +27,7 @@ class State:
     programs: list = field(default_factory=list)  # every program on the PC (sources/programs.py), busiest first
     samples: dict = field(default_factory=dict)   # this refresh's process sample (pid -> programs.Sample)
     controls: dict = field(default_factory=dict)  # program name -> appcontrol.Control (what its buttons may do)
+    startup: list = field(default_factory=list)   # [(startup.StartupApp, RAM it uses now or None)]
     taken: float = 0.0
 
 
@@ -64,6 +65,9 @@ def collect(slow: bool = False) -> State:
                                                    ram_left, False, []))
         state.programs.sort(key=lambda a: (-round(a.cpu, 1), -a.memory_mb))
     state.processes = attempt("processes", lambda: processes.rows(procs)) or []
+    apps = attempt("startup apps", startup.read) or []
+    memory = attempt("startup apps", lambda: startup.running_mb(apps, taken, appcontrol._exe)) or {}
+    state.startup = [(app, memory.get(app.name)) for app in apps]
     state.controls = attempt("program controls", lambda: appcontrol.controls(
         state.programs, taken, programs.my_session())) or {}
 
