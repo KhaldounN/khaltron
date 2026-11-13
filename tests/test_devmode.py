@@ -128,7 +128,7 @@ def test_on_freezes_boosts_lowers_and_off_puts_everything_back(dev, procs):
     assert devmode.is_on() and planned.queue_paused()
     assert "Frozen: Book analysis worker" in message
     assert psutil.Process(worker.pid).status() == psutil.STATUS_STOPPED
-    assert all(nice(pid) == devmode.HIGH for pid in family(work))
+    assert all(nice(pid) == devmode.BOOST for pid in family(work))
     assert all(nice(pid) == devmode.BELOW for pid in family(app))
     assert modes["now"] == gaming.BEST_PERFORMANCE
 
@@ -175,7 +175,7 @@ def test_enforce_boosts_and_lowers_what_starts_later(dev, procs):
     roles["work"].append(work.pid)
     roles["windows"].add(app.pid)
     devmode.enforce()
-    assert nice(work.pid) == devmode.HIGH and nice(app.pid) == devmode.BELOW
+    assert nice(work.pid) == devmode.BOOST and nice(app.pid) == devmode.BELOW
     devmode.turn_off()
     assert nice(work.pid) == nice(app.pid) == devmode.NORMAL
 
@@ -188,3 +188,24 @@ def test_gaming_and_development_mode_never_run_together(dev, procs):
     assert gaming.is_on() and not devmode.is_on()
     gaming.turn_off()
     assert not planned.queue_paused()  # both switched off cleanly: the queue is back as it was
+
+
+def test_the_app_in_front_is_never_lowered(dev, procs, monkeypatch):
+    _, roles = dev
+    app, other = procs("app"), procs("other")
+    roles["windows"] |= {app.pid, other.pid}
+    front = {"pid": app.pid}
+    monkeypatch.setattr(devmode, "foreground_pid", lambda: front["pid"])
+    devmode.turn_on()
+    assert nice(app.pid) == devmode.NORMAL       # you are typing in it
+    assert nice(other.pid) == devmode.BELOW
+    front["pid"] = other.pid                     # you switch to the other one
+    devmode.enforce()
+    assert nice(other.pid) == devmode.NORMAL     # back to normal while in front
+    assert nice(app.pid) == devmode.BELOW        # and the one you left gives way again
+    devmode.turn_off()
+    assert nice(app.pid) == nice(other.pid) == devmode.NORMAL
+
+
+def test_the_boost_is_above_normal_by_default():
+    assert devmode.BOOST == devmode.ABOVE

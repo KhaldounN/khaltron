@@ -36,7 +36,10 @@ NAME = "Development mode"
 NORMAL, ABOVE, BELOW, HIGH = 0x20, 0x8000, 0x4000, 0x80
 PRIORITY_NAMES = {0x40: "idle", BELOW: "below normal", NORMAL: "normal", ABOVE: "above normal", HIGH: "high",
                   0x100: "realtime"}
-BOOST = {"high": HIGH, "above_normal": ABOVE}.get(str(CONFIG.get("dev_boost", "high")).lower(), HIGH)
+# above normal by default: "high" let a busy ComfyUI crowd out typing (2026-11-13)
+BOOST = {"high": HIGH, "above_normal": ABOVE}.get(str(CONFIG.get("dev_boost", "above_normal")).lower(), ABOVE)
+# Windows' typing helpers: boosted with your work, so keys reach your app even when the CPU is full
+INPUT_HELPERS = {"ctfmon.exe": "Typing (Windows)", "textinputhost.exe": "Typing (Windows)"}
 
 # your work: these programs and everything they start (config "dev_keep" adds program names)
 WORK_NAMES = {n.lower() for n in ["claude.exe", "windowsterminal.exe", "code.exe", "git.exe"]
@@ -219,25 +222,51 @@ def _priority(pid: int) -> int | None:
         return None
 
 
-def _adjust(state: dict, snap: Snapshot | None = None, windows: set[int] | None = None) -> tuple[list, list]:
-    """Boost new work processes, lower new windowed programs; record both in `state`. Returns their labels."""
+def foreground_pid() -> int | None:
+    """The program whose window is in front (the one you are typing in)."""
+    if sys.platform != "win32":
+        return None
+    user32 = ctypes.windll.user32
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return None
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value or None
+
+
+def _adjust(state: dict, snap: Snapshot | None = None, windows: set[int] | None = None,
+            front: int | None = -1) -> tuple[list, list]:
+    """Boost new work processes, lower new windowed programs; record both in `state`. Returns their labels.
+    The program in front (the one you are using) is never lowered: if it was, it is set back to normal now, and
+    lowered again once you leave it."""
     snap = snap or Snapshot()
     state.setdefault("boosted", [])
     state.setdefault("lowered", [])
+    front = foreground_pid() if front == -1 else front
+    in_front = set()
+    if front and front in snap.info:
+        in_front = {front, *snap.descendants(front, lambda p: False)}
+        back = [i for i in state["lowered"] if i["pid"] in in_front]
+        if back:
+            _restore(back)
+            state["lowered"] = [i for i in state["lowered"] if i["pid"] not in in_front]
     done = {(i["pid"], i["created"]) for i in state["boosted"] + state["lowered"]}
     frozen = {i["pid"] for i in state.get("frozen", [])}
     work = work_pids(snap)
+    helpers = {pid: INPUT_HELPERS[i["name"]] for pid, i in snap.info.items() if i["name"] in INPUT_HELPERS}
     boosted, lowered = [], []
-    for pid, why in work.items():
+    for pid, why in {**helpers, **work}.items():
         created = snap.info[pid]["create_time"]
+        now = _priority(pid)
         # only normal / above normal: something set lower on purpose (a long job at below normal) stays so
-        if (pid, created) in done or pid in frozen or _priority(pid) not in (NORMAL, ABOVE):
+        if (pid, created) in done or pid in frozen or now not in (NORMAL, ABOVE) or now == BOOST:
             continue
-        if _set(state, "boosted", pid, created, why, _priority(pid), BOOST):
+        if _set(state, "boosted", pid, created, why, now, BOOST):
             boosted.append(why)
     for pid, label in lower_pids(snap, work, windows).items():
         created = snap.info[pid]["create_time"]
-        if (pid, created) in done or pid in frozen:
+        if (pid, created) in done or pid in frozen or pid in in_front:
             continue
         now = _priority(pid)
         if now == NORMAL:
@@ -295,6 +324,8 @@ def _turn_on() -> str:
     snap = Snapshot()
     frozen = gaming._freeze_new(state, website_too=False, skip=_skip_work(snap))
     lines += [f"- Frozen: {f}" for f in frozen] or ["- No background job needed freezing."]
+    lines += [f"- Left running: {n} (it watches the keyboard/mouse; frozen, typing would lag)"
+              for n in sorted(set(state.get("input_spared", [])))]
     boosted, lowered = _adjust(state, snap)
     if boosted:
         lines.append(f"- Boosted to {PRIORITY_NAMES[BOOST]} priority: {_counts(boosted)}.")

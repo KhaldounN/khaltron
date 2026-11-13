@@ -52,7 +52,7 @@ DEFAULTS = {
     "dev_flag": str(STATE / "dev-mode.json"),
     "dev_keep": [],
     "dev_keep_folders": ["stablediffusion", "comfyui", "stable-diffusion-webui"],
-    "dev_boost": "high",
+    "dev_boost": "above_normal",
     "dev_sound": True,              # development mode's start-up sound (assets/khaltron-dev-mode.wav) and volume
     "dev_sound_volume": 0.8,
     "port": 59126,                 # a second launch tells the first window to show itself through this port

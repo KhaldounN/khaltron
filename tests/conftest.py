@@ -30,3 +30,12 @@ def _no_real_mode_files(tmp_path, monkeypatch):
     from monitor import devmode, gaming
     monkeypatch.setattr(devmode, "FLAG", tmp_path / "dev-mode.json")
     monkeypatch.setattr(gaming, "FLAG", tmp_path / "gaming.json")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_input_probe(tmp_path, monkeypatch):
+    """No test sends real key taps or writes the real list of input-watching programs. A healthy PC answers in
+    1 ms; tests that need a "slow keyboard" replace probe_ms themselves."""
+    from monitor import inputguard
+    monkeypatch.setattr(inputguard, "FILE", tmp_path / "input_hooks.json")
+    monkeypatch.setattr(inputguard, "probe_ms", lambda: 1.0)

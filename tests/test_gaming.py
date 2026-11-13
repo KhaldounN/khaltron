@@ -197,3 +197,34 @@ def test_the_book_analyzer_website_is_paused_while_gaming_and_resumed_after(game
     finally:
         site.kill()
         other.kill()
+
+
+def test_a_program_that_slows_the_keyboard_is_woken_and_remembered(game, fake_worker, monkeypatch):
+    from monitor import inputguard
+    monkeypatch.setattr(inputguard, "probe_ms", lambda: 614.0)  # what freezing Photoshop Express's helper did
+    message = gaming.turn_on()
+    assert psutil.Process(fake_worker.pid).status() != psutil.STATUS_STOPPED  # woken at once
+    assert "Left running" in message and "keyboard" in message
+    assert inputguard.never_freeze(psutil.Process(fake_worker.pid).name())
+    gaming.turn_off()
+    monkeypatch.setattr(inputguard, "probe_ms", lambda: 1.0)
+    gaming.turn_on()  # remembered: not even tried again
+    assert psutil.Process(fake_worker.pid).status() != psutil.STATUS_STOPPED
+
+
+def test_a_quick_program_is_checked_once(game, fake_worker, monkeypatch):
+    from monitor import inputguard
+    calls = []
+    monkeypatch.setattr(inputguard, "probe_ms", lambda: calls.append(1) or 1.0)
+    gaming.turn_on()
+    assert psutil.Process(fake_worker.pid).status() == psutil.STATUS_STOPPED
+    first = len(calls)
+    assert first >= 1
+    gaming.turn_off()
+    gaming.turn_on()
+    assert len(calls) == first  # known to be safe: no second check
+
+
+def test_photoshop_express_helper_is_never_frozen():
+    from monitor import inputguard
+    assert inputguard.never_freeze("PSExpressBroker.exe")

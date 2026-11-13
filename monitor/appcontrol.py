@@ -122,22 +122,37 @@ def _processes(pids: list[int]) -> list[psutil.Process]:
 
 
 def pause(name: str, pids: list[int]) -> str:
+    from . import inputguard
     from .gaming import _trim
     paused = [p for p in paused_list() if psutil.pid_exists(p["pid"])]
     known = {(p["pid"], p["created"]) for p in paused}
-    done = 0
+    done, watches_input = 0, []
     for process in _processes(pids):
         try:
             created = process.create_time()
+            exe = process.name()
             if (process.pid, created) in known:
+                continue
+            if inputguard.never_freeze(exe):
+                watches_input.append(exe)
                 continue
             process.suspend()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if not inputguard.checked(exe) and not inputguard.verdict(exe):
+            try:  # paused, the keyboard/mouse got slow: wake it now (it watches every key press)
+                process.resume()
+            except psutil.NoSuchProcess:
+                pass
+            watches_input.append(exe)
             continue
         _trim(process.pid)
         paused.append({"pid": process.pid, "created": created, "program": name, "since": time.time()})
         done += 1
     write_json(PAUSED, paused)
+    if not done and watches_input:
+        return (f"Not paused: {name} watches the keyboard and mouse ({', '.join(sorted(set(watches_input)))}); "
+                "paused, every key press would lag.")
     if not done:
         return f"Nothing paused: Windows didn't allow pausing {name}."
     return f"Paused {name} ({done} process{'es' if done != 1 else ''}). Resume it from the same tab."

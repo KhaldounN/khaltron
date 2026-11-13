@@ -174,11 +174,11 @@ tray menu, or *Start / control*. While it is on the header turns yellow (raccoon
 *DEV MODE // YOUR WORK FIRST*; switching on plays `assets\khaltron-dev-mode.wav` (made by
 `tools\make_dev_sound.py`, settings `dev_sound` and `dev_sound_volume`).
 **On** pauses the planned queue and freezes the same background jobs and apps as gaming mode, but never the Book
-Analyzer website or the read-aloud voice. It gives **high** priority to your work: every `claude.exe` and everything it
+Analyzer website or the read-aloud voice. It gives **above normal** priority to your work: every `claude.exe` and everything it
 started (node, python, shells, dev servers, its test browsers), Windows Terminal, VS Code, git, and anything run from a
 Stable Diffusion folder (ComfyUI) with what it starts. Every other program **with a window** (browsers, chat...) is
 lowered to *below normal*: it keeps working but always gives way; nothing with a window is frozen, so nothing looks
-crashed. Windows' power mode goes to Best performance. A planned job is background work even when Claude queued it.
+crashed. The app in front (the one you are typing in) is never lowered: it goes back to normal while you use it. Windows' power mode goes to Best performance. A planned job is background work even when Claude queued it.
 While it is on, every refresh freezes new jobs, boosts what your work started since and lowers newly opened programs.
 **Off** resumes the frozen jobs and sets back every priority it changed (unless you changed one yourself meanwhile).
 The switch file is `state\dev-mode.json` (setting `dev_flag`); every switch is logged in `state\devmode.log`.
@@ -187,7 +187,16 @@ mode waits while development mode is on.
 
 Settings: `dev_keep` (more program names that count as your work, e.g. `["cursor.exe"]`), `dev_keep_folders`
 (folders whose programs are your work; default Stable Diffusion / ComfyUI), `dev_boost` (`"high"` or
-`"above_normal"`).
+`"above_normal"`, the default; "high" let a busy ComfyUI crowd out typing).
+
+## The keyboard and mouse always stay quick
+
+Some programs watch every key press (a "low-level hook"); frozen, they make Windows wait ~300 ms on every key. So the
+first time Khaltron freezes or pauses a program (gaming mode, development mode, the Programs tab's Pause), it times
+one invisible F24 tap and a zero-distance mouse move; if that is slow, the program is woken at once and never frozen
+again. The answers are kept in `state\input_hooks.json` (`hooks` / `safe`; delete the file to check everything
+again). Photoshop Express's helper (`PSExpressBroker.exe`) is known: freezing it made every key tap take 614 ms
+instead of 1 ms. Add others with the setting `input_hooks`.
 
 ## Make it watch your own jobs
 
@@ -239,6 +248,7 @@ Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repositor
 | `monitor\alerts.py`, `monitor\tray.py` | notifications, history, the tray icon |
 | `monitor\gaming.py`, `gaming.ps1` | gaming mode |
 | `monitor\devmode.py`, `devmode.ps1` | development mode |
+| `monitor\inputguard.py` | never freeze a program that watches the keyboard or mouse |
 
 Run the tests with `.venv\Scripts\python.exe -m pytest`.
 

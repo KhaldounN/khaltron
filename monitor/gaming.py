@@ -25,7 +25,7 @@ from pathlib import Path
 
 import psutil
 
-from . import planned
+from . import inputguard, planned
 from .config import BOOK, CONFIG, STATE
 from .sources.processes import KNOWN
 from .util import NO_WINDOW, read_json, write_json
@@ -167,11 +167,21 @@ def _freeze_new(state: dict, website_too: bool = True, skip=None) -> list[str]:
             # named BEFORE freezing: _trim empties its RAM, and the extras are recognised by their RAM
             cmdline = _cmdline(process)
             name = (getattr(process, "info", None) or {}).get("name") or process.name()
+            if inputguard.never_freeze(name):  # it watches the keyboard/mouse: frozen, it would make typing lag
+                continue
             label = ("Book Analyzer website" if website(cmdline) else None) or \
                 next((lbl for needle, lbl, _ in KNOWN if needle in cmdline), None) or \
                 _extras(process, name.lower(), cmdline) or "Planned job"
             process.suspend()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if not inputguard.checked(name) and not inputguard.verdict(name):
+            # first time this program is frozen and the keyboard/mouse got slow: wake it now, never freeze it again
+            try:
+                process.resume()
+            except psutil.NoSuchProcess:
+                pass
+            state.setdefault("input_spared", []).append(name)
             continue
         _trim(process.pid)
         state["frozen"].append({"pid": process.pid, "created": created, "label": label})
@@ -248,6 +258,8 @@ def _turn_on(auto: dict | None = None) -> str:
         lines.append("- Planned queue paused (no new job starts).")
     frozen = _freeze_new(state)
     lines += [f"- Frozen: {f}" for f in frozen] or ["- No background job was running."]
+    lines += [f"- Left running: {n} (it watches the keyboard/mouse; frozen, typing would lag)"
+              for n in sorted(set(state.get("input_spared", [])))]
     if _stop_voice():
         lines.append("- Voice server stopped (read-aloud is off until gaming mode ends).")
     mode = power_mode()
