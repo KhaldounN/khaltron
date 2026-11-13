@@ -81,7 +81,10 @@ def do(job: Job, action: str) -> str:
         os.startfile(job.folder)
         return "Folder opened."
     if action in ("startup_off", "startup_on"):
-        return startup.set_on(job.ref["app"], action == "startup_on")
+        message = startup.set_on(job.ref["app"], action == "startup_on")
+        from . import collect
+        collect._startup = None  # the tab shows the change at the next refresh, not in a minute
+        return message
     if action in ("keep_app", "unkeep_app"):
         from . import mywork
         return mywork.mark(job.name, job.ref.get("allowed", []) or job.ref.get("pids", []), action == "keep_app")
@@ -100,6 +103,8 @@ def do(job: Job, action: str) -> str:
     if action == "runtask":
         subprocess.run(["powershell", "-NoProfile", "-Command", "Start-ScheduledTask -TaskName $args[0]",
                         job.ref["task"]], capture_output=True, creationflags=NO_WINDOW, check=True)
+        from .collect import refresh_tasks_soon
+        refresh_tasks_soon()  # show its new state at the next refresh, not in 10 minutes
         return f"Started the task {job.name}."
     raise ValueError(f"'{action}' can't be done on this row")
 

@@ -14,7 +14,8 @@ DEFAULTS = {
     "book_analyzer": str(HOME.parent / "book analyzer v2"),
     "refresh_seconds": 2,           # how often the window re-reads everything
     "hidden_refresh_seconds": 6,    # ... while it is hidden in the tray (alerts still come; nothing is redrawn)
-    "slow_refresh_seconds": 60,     # scheduled tasks and the library count (slower to read)
+    "slow_refresh_seconds": 60,     # the library count (slower to read)
+    "tasks_refresh_seconds": 600,   # the scheduled tasks (a ~6 s PowerShell call, in its own thread)
     "low_memory_mb": 1500,          # below this the memory bar turns red and a warning pops up (stage 2's own limit)
     "memory_pause_mb": 1024,        # a running job of yours is frozen while less RAM than this is free (0 = never)
     "memory_resume_mb": 3072,       # ... and woken again once this much is free

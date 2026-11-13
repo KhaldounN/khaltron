@@ -62,6 +62,7 @@ def set_enabled(on: bool) -> None:
 
 # --- finding a game -------------------------------------------------------------------------------------------------
 _exes: dict[tuple[int, float], str] = {}  # (pid, started) -> its program's path, lower case ("" = unknown)
+_verdicts: dict[tuple[int, float], bool] = {}  # (pid, started) -> is it a game (decided once per process)
 
 
 def _exe(pid: int, started: float) -> str:
@@ -135,10 +136,17 @@ class Watcher:
 
     def games(self, samples: dict) -> dict[tuple[int, float], str]:
         """Every game running now: (pid, started) -> its name."""
+        global _verdicts
         found = {}
         for pid, item in samples.items():
-            if item.name and item.name.lower().endswith(".exe") and is_game_path(_exe(pid, item.started), item.name):
-                found[(pid, item.started)] = os.path.splitext(item.name)[0]
+            key = (pid, item.started)
+            verdict = _verdicts.get(key)
+            if verdict is None:  # a process's program never changes: decide once (was ~300 checks every refresh)
+                verdict = bool(item.name and item.name.lower().endswith(".exe")
+                               and is_game_path(_exe(pid, item.started), item.name))
+                _verdicts[key] = verdict
+            if verdict:
+                found[key] = os.path.splitext(item.name)[0]
         front = self.front()
         if front and front in samples:
             item = samples[front]
@@ -158,6 +166,8 @@ class Watcher:
         global _exes
         if len(_exes) > 4 * max(1, len(live)):
             _exes = {key: path for key, path in _exes.items() if key in live}
+        if len(_verdicts) > 4 * max(1, len(live)):
+            _verdicts = {key: v for key, v in _verdicts.items() if key in live}
         return found
 
     def tick(self, samples: dict) -> list[tuple[str, str]]:

@@ -26,7 +26,7 @@ def query(names: list[str]) -> list[dict]:
     try:
         quoted = ", ".join("'" + n.replace("'", "''") + "'" for n in names)
         done = subprocess.run(["powershell", "-NoProfile", "-Command", SCRIPT.replace("__NAMES__", quoted)], capture_output=True,
-                              text=True, timeout=30, creationflags=NO_WINDOW)
+                              text=True, timeout=30, creationflags=NO_WINDOW | 0x4000)  # 0x4000: below normal priority
         found = json.loads(done.stdout or "[]")
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return []

@@ -1,5 +1,6 @@
 """One refresh: ask every reader, and put the answers together for the window."""
 
+import threading
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -32,10 +33,29 @@ class State:
 
 
 _tasks: tuple[float, list[Job]] = (0.0, [])
+_startup: list | None = None  # the Startup apps tab's rows, re-read on the slow refresh
+_reading = threading.Event()  # a scheduled-task reading is under way
+
+
+def _read_tasks():
+    global _tasks
+    try:
+        found = scheduled.read(CONFIG["scheduled_tasks"])
+        _tasks = (time.time(), found if found is not None else _tasks[1])
+    except Exception:  # noqa: BLE001 - try again at the next interval
+        _tasks = (time.time(), _tasks[1])
+    finally:
+        _reading.clear()
+
+
+def refresh_tasks_soon() -> None:
+    """Re-read the scheduled tasks at the next refresh (after 'Run task now')."""
+    global _tasks
+    _tasks = (0.0, _tasks[1])
 
 
 def collect(slow: bool = False) -> State:
-    """`slow`: also re-read the scheduled tasks (a PowerShell call, ~1 s)."""
+    """`slow`: also the slower readers (the library count). Scheduled tasks are read in their own thread."""
     global _tasks
     began = time.time()
     state = State()
@@ -65,9 +85,13 @@ def collect(slow: bool = False) -> State:
                                                    ram_left, False, []))
         state.programs.sort(key=lambda a: (-round(a.cpu, 1), -a.memory_mb))
     state.processes = attempt("processes", lambda: processes.rows(procs)) or []
-    apps = attempt("startup apps", startup.read) or []
-    memory = attempt("startup apps", lambda: startup.running_mb(apps, taken, appcontrol._exe)) or {}
-    state.startup = [(app, memory.get(app.name)) for app in apps]
+    # the Startup apps tab: only on the slow refresh (once a minute; was every refresh, ~12 ms each)
+    global _startup
+    if slow or _startup is None:
+        apps = attempt("startup apps", startup.read) or []
+        memory = attempt("startup apps", lambda: startup.running_mb(apps, taken, appcontrol._exe)) or {}
+        _startup = [(app, memory.get(app.name)) for app in apps]
+    state.startup = _startup
     state.controls = attempt("program controls", lambda: appcontrol.controls(
         state.programs, taken, programs.my_session())) or {}
 
@@ -104,10 +128,12 @@ def collect(slow: bool = False) -> State:
     state.stage2_paused = has_book and read_json(status, {}).get("state") == "paused"
     state.queue_paused = planned.queue_paused()
 
-    if slow or not _tasks[0]:
-        found = attempt("scheduled tasks", lambda: scheduled.read(CONFIG["scheduled_tasks"]))
-        if found is not None:
-            _tasks = (time.time(), found)
+    # scheduled tasks: a PowerShell call of ~6 s (it loads Windows' task module), so every 10 minutes, in a thread of
+    # its own at low priority; the refresh never waits for it and shows the last reading meanwhile (2026-11-13: it
+    # was every minute, in the refresh itself)
+    if time.time() - _tasks[0] >= CONFIG.get("tasks_refresh_seconds", 600) and not _reading.is_set():
+        _reading.set()
+        threading.Thread(target=_read_tasks, daemon=True).start()
     state.tasks = _tasks[1]
     state.taken = time.time() - began
     return state
