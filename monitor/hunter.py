@@ -57,7 +57,8 @@ LIDS = [[(919.3, 68.2), (948.7, 68.2), (948.7, 80.8), (919.3, 73.4)],
         [(971.3, 69.9), (1000.5, 69.9), (1000.5, 75.1), (971.3, 82.3)]]
 EYE = {"glow": 10.5, "dark": 5.7, "ring": 4.5, "ring_w": 1.4, "pupil": 2.6, "spark": 1.2}
 BEAM = {"start": 4, "length": 1000, "half": 20, "laser_from": 8, "laser_to": 966}
-TIMING = {"idleStep": 1800, "firstIdle": 1200, "sweepStart": 450, "lookToWarn": 380, "warnToNext": 260,
+TIMING = {"idleStep": 3600,  # the design said 1.8 s; halved for a lighter header (2026-11-13)
+          "firstIdle": 1200, "sweepStart": 450, "lookToWarn": 380, "warnToNext": 260,
           "afterLastWarn": 800, "pausingToLocked": 1300}
 STATUS = {"monitored": ("● MONITORED", "#7FE9FF"), "scanning": ("SCANNING…", "#C2AEAE"),
           "warned": ("⚠ WARNED", "#FF7A7A"), "paused": ("❚❚ PAUSED", "#FFB3B3"),
@@ -184,7 +185,8 @@ class KhaltronHeader(tk.Canvas):
     mode, and targets() for the cards gaming mode will pause. Development mode has its own pill left of the gaming
     one: on_dev() when clicked, set_dev() for its state (hidden while gaming mode runs: never both)."""
 
-    FRAME_MS = 90
+    FRAME_MS = 90    # while something moves: the gaming sequence, the eyes turning, a card flashing
+    CALM_MS = 220    # calm (monitor / dev mode, eyes still): the glow and the dust don't need more (2026-11-13: lighter)
 
     def __init__(self, parent, on_locked, on_exit, targets, on_dev=None):
         super().__init__(parent, height=200, bg=theme.BG, highlightthickness=0)
@@ -256,6 +258,7 @@ class KhaltronHeader(tk.Canvas):
         self.shaken = (0.0, 0.0)
         # eye overlays (in the camera layer: they move with the push-in and the shake)
         self.eyes = []
+        self.glow_colours, self.pupils_ready = {}, False  # new items: paint them once in full
         for i, (ex, ey) in enumerate(EYES):
             x, y = self.cam(ex, ey)
             g, d, r_ = EYE["glow"], EYE["dark"], EYE["ring"]
@@ -281,7 +284,7 @@ class KhaltronHeader(tk.Canvas):
         # dust motes drifting up
         rng = random.Random(11)
         self.motes = [(self.create_oval(0, 0, 0, 0, fill=a, outline=""), rng.uniform(40, VIEW_W - 40), rng.uniform(80, 165),
-                       rng.uniform(0, 10), rng.uniform(8, 13)) for _ in range(14)]
+                       rng.uniform(0, 10), rng.uniform(8, 13)) for _ in range(8)]
         # the cards
         self.card_items = []
         name_font = tkfont.Font(family=theme.MONO + (" SemiBold" if theme.MONO == "JetBrains Mono" else ""),
@@ -684,7 +687,9 @@ class KhaltronHeader(tk.Canvas):
         try:
             if self.winfo_viewable() and self.width and self.phase != "locked":
                 self._frame(time.time() - self.started)
-            delay = 700 if self.phase == "locked" else theme.pace(self, self.FRAME_MS, background=450)
+            busy = (self.hunt and self.phase != "locked") or self.flash or self.gaze.get("to") and                 time.time() - self.gaze["since"] < .6
+            fast = self.FRAME_MS if busy else self.CALM_MS
+            delay = 700 if self.phase == "locked" else theme.pace(self, fast, background=450)
             self.after(delay, self._tick)
         except tk.TclError:
             return
@@ -715,13 +720,25 @@ class KhaltronHeader(tk.Canvas):
         period = .5 if self.hunt else 2.6
         pulse = 1.0 if locked else .775 + .225 * math.cos(t * 2 * math.pi / period)
         strength = (.9 if self.hunt else .45) * pulse
+        # calm: the slow glow pulse and the dust only every second frame (~2 a second; they move slowly anyway)
+        self.frames = getattr(self, "frames", 0) + 1
+        busy = moving or force or (self.hunt and not locked) or bool(self.flash)
+        slow_parts = busy or self.frames % 2 == 0
+        pupils_moved = moving or force or (dx, dy) != (0.0, 0.0) or not getattr(self, "pupils_ready", False)
+        glows = getattr(self, "glow_colours", {})
         for eye in self.eyes:
             for ring, share in zip(eye["glow"], (.55, .9)):
-                self.itemconfigure(ring, outline=theme.mix("#05070A", a, share * strength))
-            ex, ey = eye["x"] + self.shaken[0], eye["y"] + self.shaken[1]
-            px, py = ex + g["pupil"][0] * S, ey + g["pupil"][1] * S  # (design px, scaled)
-            for item, r in zip(eye["pupil"], (EYE["pupil"], EYE["spark"])):
-                self.coords(item, px - r * S, py - r * S, px + r * S, py + r * S)
+                colour = theme.mix("#05070A", a, share * strength)
+                if slow_parts and (glows.get(ring) != colour or force):  # only when changed: each change repaints
+                    self.itemconfigure(ring, outline=colour)
+                    glows[ring] = colour
+            if pupils_moved:
+                ex, ey = eye["x"] + self.shaken[0], eye["y"] + self.shaken[1]
+                px, py = ex + g["pupil"][0] * S, ey + g["pupil"][1] * S  # (design px, scaled)
+                for item, r in zip(eye["pupil"], (EYE["pupil"], EYE["spark"])):
+                    self.coords(item, px - r * S, py - r * S, px + r * S, py + r * S)
+        self.glow_colours = glows
+        self.pupils_ready = not moving
         # beams: a cone from each eye, rotated toward the card (scaled wide when looking down); lasers in gaming
         if moving or force or (self.hunt and not locked) or not self.beams_ready:
             flicker = self.hunt and not locked and int(t * 1000 / 120) % 2
@@ -744,7 +761,7 @@ class KhaltronHeader(tk.Canvas):
                 self.itemconfigure(laser, state="normal" if self.hunt and g["scale"] < 2 else "hidden")
             self.beams_ready = not moving
         # dust drifting up (frozen in mid-air once locked)
-        if not locked:
+        if not locked and slow_parts:
             for item, x0, y0, phase, dur in self.motes:
                 p = ((t + phase) % dur) / dur
                 x, y = self.P(x0 + 14 * p, y0 - 50 * p)

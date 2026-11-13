@@ -249,6 +249,7 @@ Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repositor
 | `monitor\planned.py`, `monitor\runner.py`, `jobq.py` | the planned queue, the process that runs it, and its command line |
 | `monitor\actions.py`, `monitor\protect.py` | what the buttons do, and the never-stop list |
 | `monitor\alerts.py`, `monitor\tray.py` | notifications, history, the tray icon |
+| `monitor\sources\gpu.py` | the GPU card: load, video memory, temperature, through NVIDIA's `nvml.dll` (no install) |
 | `monitor\gaming.py`, `gaming.ps1` | gaming mode |
 | `monitor\devmode.py`, `devmode.ps1` | development mode |
 | `monitor\inputguard.py` | never freeze a program that watches the keyboard or mouse |

@@ -13,6 +13,7 @@ from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
 from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
 from .collect import State, collect
+from .sources import gpu as gpu_source
 from .config import BOOK, CONFIG, HAS_BOOK
 from .model import DONE, FAILED, PAUSED, RUNNING, STOPPED, WAITING, Job
 from .util import duration, read_json, when
@@ -264,8 +265,9 @@ class App:
         cards.pack(fill="x")
         self.ram_card = StatCard(cards, "RAM in use")
         self.cpu_card = StatCard(cards, "CPU")
+        self.gpu_card = StatCard(cards, "GPU")
         self.jobs_card = StatCard(cards, "Your background jobs")
-        for column, card in enumerate((self.ram_card, self.cpu_card, self.jobs_card)):
+        for column, card in enumerate((self.ram_card, self.cpu_card, self.gpu_card, self.jobs_card)):
             card.grid(row=0, column=column, sticky="we", padx=(0 if column == 0 else 10, 0))
             cards.columnconfigure(column, weight=1, uniform="cards")
         self.running_title = Section(overview, "Now running")
@@ -419,6 +421,18 @@ class App:
         self.root.after(200, self.poll)
 
     # --- drawing ---------------------------------------------------------------------------------------------
+    def show_gpu(self):
+        """The GPU card: how busy the graphics card is, its video memory and temperature (sources/gpu.py, ~1 ms).
+        Read here, so only while the window is visible: asking a laptop's sleeping graphics card wakes it."""
+        g = gpu_source.read()
+        if g is None:
+            self.gpu_card.update_value(0, "-", "no NVIDIA graphics card\nfound", theme.MUTED)
+            return
+        colour = RED if g.load > 90 else AMBER if g.load > 60 else GREEN
+        memory = f"{gb(g.used_mb)} / {gb(g.total_mb)} video memory" if g.total_mb else "video memory unknown"
+        heat = f"  {g.temp_c}°C" if g.temp_c is not None else ""
+        self.gpu_card.update_value(g.load / 100, f"{g.load:.0f}%", f"{memory}\n{g.name}{heat}", colour)
+
     def background(self, state: State) -> tuple[bool, bool]:
         """What must happen on every refresh even with the window hidden: pop-ups when a mode was switched elsewhere,
         the tray tooltip, job started / finished / failed alerts. Returns (gaming on, development on)."""
@@ -462,6 +476,7 @@ class App:
             self.cpu_card.update_value(h.cpu / 100, f"{h.cpu:.0f}%", f"of {h.cores} threads"
                                        + (f"\nbusiest: {busiest} {top_app.cpu:.0f}%" if top_app else ""),
                                        cpu_colour)
+            self.show_gpu()
             others = max(0, h.used_mb - state.jobs_mb)
             self.jobs_card.update_value(state.jobs_cpu / 100, f"{state.jobs_cpu:.0f}%  {gb(state.jobs_mb) or '0 MB'}",
                                         f"CPU and RAM of {len(state.running)} running\nall else: {gb(others)} RAM",
