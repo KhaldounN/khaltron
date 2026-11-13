@@ -1,7 +1,8 @@
 """Khaltron 9000 (the Job Monitor): start with  .venv\\Scripts\\pythonw.exe monitor.pyw  (--tray: start hidden in the tray).
 
 Only one copy runs: a second launch tells the first one (through a local port) to show its window, then exits.
-The same port takes 'gaming <on|off|toggle|status>' and 'dev ...' from gaming.ps1 / devmode.ps1 (fast hotkeys)."""
+The same port takes '<key> gaming <on|off|toggle|status>' and '<key> dev ...' from gaming.ps1 / devmode.ps1 (fast
+hotkeys); the key is in state/port.token. A message without the right key gets no answer."""
 
 import socket
 import sys
@@ -37,7 +38,26 @@ def mode_command(word: str, command: str) -> str:
     return (cleaned + "\n\n" if cleaned else "") + actions[command]()
 
 
+def token() -> str:
+    """The key mode commands must carry (2026-11-13): any program on this PC can reach the port, but only those that
+    can read state/port.token (your own account) can switch a mode. Made once, kept."""
+    import secrets
+    from monitor.config import STATE
+    path = STATE / "port.token"
+    try:
+        found = path.read_text(encoding="utf-8").strip()
+        if len(found) >= 32:
+            return found
+    except OSError:
+        pass
+    found = secrets.token_hex(16)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(found, encoding="utf-8")
+    return found
+
+
 def listen(port: int, app) -> socket.socket:
+    key = token()
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(("127.0.0.1", port))  # only this PC can connect
     server.listen(4)
@@ -48,8 +68,8 @@ def listen(port: int, app) -> socket.socket:
                 words = connection.recv(64).decode("utf-8", "replace").split()
                 if words[:1] == ["show"]:
                     app.results.put(("show", None))
-                elif len(words) == 2 and words[0] in ("gaming", "dev"):
-                    reply = mode_command(words[0], words[1].lower())
+                elif len(words) == 3 and words[0] == key and words[1] in ("gaming", "dev"):
+                    reply = mode_command(words[1], words[2].lower())
                     app.wake.set()  # the window shows the new mode at once
                     connection.sendall(reply.encode("utf-8"))
             except Exception as error:  # noqa: BLE001 - a bad message must never stop the listener

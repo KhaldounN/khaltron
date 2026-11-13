@@ -8,7 +8,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import actions, alerts, autogame, devmode, gaming, planned, runner, startup, theme
+from . import actions, alerts, autogame, devmode, gaming, memguard, planned, runner, startup, theme
 from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
 from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
@@ -365,6 +365,11 @@ class App:
                 self.results.put(("message", f"Reading failed: {error}"))
             else:
                 self.check_modes(state.samples)
+                try:  # the memory guard: low RAM -> freeze your biggest job; RAM back -> wake it (memguard.py)
+                    for note in memguard.check(state.health.free_mb if state.health else None):
+                        self.results.put(("notify", note))
+                except Exception as error:  # noqa: BLE001
+                    self.results.put(("message", f"Memory guard check failed: {error}"))
                 try:  # auto gaming mode: a game started or closed?
                     for note in self.autogame.tick(state.samples):
                         self.switched_at = time.time()
@@ -740,6 +745,10 @@ class App:
             self.visible = False
 
     def quit(self):
+        try:  # jobs the memory guard froze must not stay frozen with nobody watching them
+            memguard.release_all()
+        except Exception:  # noqa: BLE001
+            pass
         if self.tray:
             self.tray.stop()
         self.root.destroy()

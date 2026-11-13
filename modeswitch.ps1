@@ -10,12 +10,15 @@ function Invoke-ModeSwitch([string]$Word, [string]$Module, [string]$Command, [st
         if ($cfg.port) { $port = [int]$cfg.port }
     } catch {}
     $out = $null
+    $key = ''
+    try { $key = (Get-Content (Join-Path $here 'state\port.token') -Raw -ErrorAction Stop).Trim() } catch {}
     try {
+        if (-not $key) { throw 'no key: Khaltron has not started yet' }
         $client = New-Object System.Net.Sockets.TcpClient
         $client.Connect('127.0.0.1', $port)        # refused at once when Khaltron isn't running
         $client.ReceiveTimeout = 90000             # turning a mode on can take some seconds
         $stream = $client.GetStream()
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes("$Word $Command`n")
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes("$key $Word $Command`n")  # the key from state\port.token
         $stream.Write($bytes, 0, $bytes.Length)
         $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8)
         $out = $reader.ReadToEnd().Trim()

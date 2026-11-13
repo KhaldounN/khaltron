@@ -16,6 +16,8 @@ DEFAULTS = {
     "hidden_refresh_seconds": 6,    # ... while it is hidden in the tray (alerts still come; nothing is redrawn)
     "slow_refresh_seconds": 60,     # scheduled tasks and the library count (slower to read)
     "low_memory_mb": 1500,          # below this the memory bar turns red and a warning pops up (stage 2's own limit)
+    "memory_pause_mb": 1024,        # a running job of yours is frozen while less RAM than this is free (0 = never)
+    "memory_resume_mb": 3072,       # ... and woken again once this much is free
     "memory_guard_mb": 2048,        # the planned queue starts a new job only with this much RAM free (0 = no guard)
     "heavy_process_mb": 300,        # a python process using more memory than this is listed
     "heavy_process_cpu": 20,        # ... or more CPU (percent of one core) than this

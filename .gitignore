@@ -8,3 +8,11 @@ config.json
 
 # Adobe Stock preview photo (watermarked): not ours to redistribute, never push
 assets/about-raccoon.jpg
+
+# loose downloads and reports in the top folder never go to the public repo (2026-11-13)
+*.torrent
+*.pdf
+/*.jpg
+/*.jpeg
+/*.png
+/*.webp

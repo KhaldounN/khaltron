@@ -85,3 +85,49 @@ def test_your_work_is_never_frozen(game, fake_worker):
     assert "no longer on your work list" in mywork.mark("Python", [fake_worker.pid], False)
     gaming.turn_on()
     assert psutil.Process(fake_worker.pid).status() == psutil.STATUS_STOPPED
+
+
+# --- the memory guard for running jobs ------------------------------------------------------------------------------
+@pytest.fixture
+def guard(game, tmp_path, monkeypatch):
+    from monitor import memguard
+    monkeypatch.setattr(memguard, "FILE", tmp_path / "memguard.json")
+    monkeypatch.setitem(memguard.CONFIG, "memory_pause_mb", 1024)
+    monkeypatch.setitem(memguard.CONFIG, "memory_resume_mb", 3072)
+    yield memguard
+    memguard.release_all()
+
+
+def stopped(process) -> bool:
+    """Is the job frozen? (A venv's python.exe is a launcher; the guard freezes the bigger one, the real worker.)"""
+    me = psutil.Process(process.pid)
+    return any(p.status() == psutil.STATUS_STOPPED for p in [me] + me.children(recursive=True))
+
+
+def test_low_memory_freezes_a_running_job_and_wakes_it_later(guard, fake_worker):
+    notes = guard.check(free_mb=600)
+    assert notes and "Memory low" in notes[0][0]
+    assert stopped(fake_worker)
+    assert guard.check(free_mb=2000) == []  # in between: wait
+    notes = guard.check(free_mb=5000)
+    assert notes and "carries on" in notes[0][1]
+    assert not stopped(fake_worker)
+
+
+def test_the_guard_leaves_jobs_alone_while_a_mode_is_on(guard, fake_worker):
+    gaming.turn_on()
+    assert guard.check(free_mb=100) == []
+    gaming.turn_off()
+    assert not stopped(fake_worker)
+
+
+def test_quitting_wakes_what_the_guard_froze(guard, fake_worker):
+    guard.check(free_mb=600)
+    assert guard.release_all() >= 1
+    assert not stopped(fake_worker)
+
+
+def test_your_work_is_never_frozen_by_the_guard(guard, fake_worker):
+    mywork.mark("Python", [fake_worker.pid], True)
+    assert guard.check(free_mb=100) == []
+    assert not stopped(fake_worker)
