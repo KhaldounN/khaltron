@@ -52,6 +52,8 @@ def dev(state_dir, tmp_path, monkeypatch):
     monkeypatch.setattr(devmode, "work_pids", lambda snap: {
         pid: "Claude" for root in roles["work"] for pid in [root] + snap.descendants(root, lambda p: False)})
     monkeypatch.setattr(devmode, "window_pids", lambda: set(roles["windows"]))
+    # the stand-ins are pythons: count them as main programs (like claude.exe), which are the ones boosted
+    monkeypatch.setattr(devmode, "WORK_NAMES", devmode.WORK_NAMES | {"python.exe"})
     yield modes, roles
     if devmode.is_on():  # a failed test must not leave anything frozen or changed
         devmode.turn_off()
@@ -209,3 +211,27 @@ def test_the_app_in_front_is_never_lowered(dev, procs, monkeypatch):
 
 def test_the_boost_is_above_normal_by_default():
     assert devmode.BOOST == devmode.ABOVE
+
+
+def test_short_commands_claude_runs_are_protected_but_not_boosted(dev, procs, monkeypatch):
+    _, roles = dev
+    monkeypatch.setattr(devmode, "WORK_NAMES", devmode.WORK_NAMES - {"python.exe"})  # a helper, not claude.exe
+    helper = procs("analyzer.worker")  # e.g. a test run Claude started: looks like a job, is your work
+    roles["work"].append(helper.pid)
+    devmode.turn_on()
+    assert psutil.Process(helper.pid).status() != psutil.STATUS_STOPPED   # never frozen
+    assert all(nice(pid) == devmode.NORMAL for pid in family(helper))     # and left at normal
+
+
+def test_enforce_uses_the_monitors_own_sample(dev, procs):
+    from monitor.sources import programs
+    _, roles = dev
+    devmode.turn_on()
+    work = procs("work")
+    roles["work"].append(work.pid)
+    me = psutil.Process(work.pid)
+    sample = {pid: programs.Sample(*([None] * len(programs.Sample._fields)))._replace(
+        name=psutil.Process(pid).name(), ppid=psutil.Process(pid).ppid(), started=psutil.Process(pid).create_time())
+        for pid in [me.pid] + [c.pid for c in me.children(recursive=True)]}
+    devmode.enforce(sample)
+    assert nice(work.pid) == devmode.BOOST

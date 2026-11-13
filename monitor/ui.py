@@ -181,6 +181,10 @@ class App:
         self.switched_at = 0.0  # when Khaltron itself last switched gaming mode (it says so in its own pop-up)
         self.dev_was = None     # development mode at the last refresh
         self.dev_busy = False   # development mode is switching in the background
+        self.visible = not start_hidden  # hidden in the tray: no redrawing, slower refresh
+        self.pending = None              # the newest state, drawn when the window is shown again
+        root.bind("<Unmap>", self.minimised, add="+")  # minimised counts as hidden too
+        root.bind("<Map>", self.shown, add="+")
         self.autogame = autogame.Watcher()
         root.title(theme.NAME)
         # tall enough for the header; never taller than the screen (a laptop's is ~1080 px with the taskbar)
@@ -345,20 +349,11 @@ class App:
             if slow:
                 last_slow = time.time()
             try:
-                for frozen in gaming.enforce():  # gaming mode: a job that started anyway is frozen too
-                    self.results.put(("notify", ("Gaming mode: job frozen", frozen)))
-            except Exception as error:  # noqa: BLE001
-                self.results.put(("message", f"Gaming mode check failed: {error}"))
-            try:
-                for frozen in devmode.enforce():  # development mode: new jobs frozen, new work boosted
-                    self.results.put(("notify", ("Development mode: job frozen", frozen)))
-            except Exception as error:  # noqa: BLE001
-                self.results.put(("message", f"Development mode check failed: {error}"))
-            try:
                 state = collect(slow)
             except Exception as error:  # noqa: BLE001
                 self.results.put(("message", f"Reading failed: {error}"))
             else:
+                self.check_modes(state.samples)
                 try:  # auto gaming mode: a game started or closed?
                     for note in self.autogame.tick(state.samples):
                         self.switched_at = time.time()
@@ -366,8 +361,29 @@ class App:
                 except Exception as error:  # noqa: BLE001
                     self.results.put(("message", f"Auto gaming mode check failed: {error}"))
                 self.results.put(("state", state))
-            self.wake.wait(CONFIG["refresh_seconds"])
+            self.wake.wait(CONFIG["refresh_seconds"] if self.visible else CONFIG.get("hidden_refresh_seconds", 6))
             self.wake.clear()
+
+    def check_modes(self, samples: dict):
+        """While gaming or development mode is on: freeze jobs that started anyway, and (development mode) boost or
+        lower what is new. Every config "mode_check_seconds" (15 s), with this refresh's process sample: checking
+        every 2 s with a scan of its own was a constant load on an already busy PC (2026-11-13)."""
+        if not (gaming.is_on() or devmode.is_on()):
+            self.modes_checked = 0.0  # the first check after a switch happens at once
+            return
+        if time.time() - getattr(self, "modes_checked", 0.0) < CONFIG.get("mode_check_seconds", 15):
+            return
+        self.modes_checked = time.time()
+        try:
+            for frozen in gaming.enforce():  # gaming mode: a job that started anyway is frozen too
+                self.results.put(("notify", ("Gaming mode: job frozen", frozen)))
+        except Exception as error:  # noqa: BLE001
+            self.results.put(("message", f"Gaming mode check failed: {error}"))
+        try:
+            for frozen in devmode.enforce(samples):  # development mode: new jobs frozen, new work boosted
+                self.results.put(("notify", ("Development mode: job frozen", frozen)))
+        except Exception as error:  # noqa: BLE001
+            self.results.put(("message", f"Development mode check failed: {error}"))
 
     def poll(self):
         try:
@@ -403,7 +419,34 @@ class App:
         self.root.after(200, self.poll)
 
     # --- drawing ---------------------------------------------------------------------------------------------
+    def background(self, state: State) -> tuple[bool, bool]:
+        """What must happen on every refresh even with the window hidden: pop-ups when a mode was switched elsewhere,
+        the tray tooltip, job started / finished / failed alerts. Returns (gaming on, development on)."""
+        playing, developing = gaming.is_on(), devmode.is_on()
+        recent = time.time() - self.switched_at <= 20  # Khaltron switched it itself: its own pop-up says so
+        if playing != self.gaming_was and self.gaming_was is not None and self.tray and not recent:
+            self.tray.notify("Gaming mode " + ("ON" if playing else "OFF"),
+                             "Background jobs frozen, voice off. Have fun!" if playing else "Background jobs carry on.")
+        if developing != self.dev_was and self.dev_was is not None and self.tray and not recent:
+            self.tray.notify("Development mode " + ("ON" if developing else "OFF"),
+                             "Your work comes first; background jobs frozen." if developing
+                             else "Everything is back as it was.")
+        self.gaming_was, self.dev_was = playing, developing
+        if self.tray:
+            self.tray.set_tooltip(f"{theme.NAME}: {len(state.running)} running, {len(state.waiting)} waiting")
+        for title, message in self.watcher.changes(state):
+            if self.alerts_on and self.tray:
+                self.tray.notify(title, message)
+        return playing, developing
+
     def draw(self, state: State):
+        """One refresh. Hidden in the tray, only background() runs and the newest state waits for show(): redrawing
+        every table and graph nobody could see was most of Khaltron's CPU use (2026-11-13)."""
+        playing, developing = self.background(state)
+        if not self.visible:
+            self.pending = state
+            return
+        self.pending = None
         now = time.time()
         h = state.health
         if h:
@@ -426,26 +469,15 @@ class App:
         alert = bool(h and h.free_mb < CONFIG["low_memory_mb"]) or any(
             j.state == FAILED and j.finished and now - j.finished < 600 for j in state.finished)
         flags = []
-        playing = gaming.is_on()
         if not self.gaming_switch.busy:
             self.gaming_switch.set_state(playing)
         if playing:
             flags.append("GAMING MODE is on: background jobs are frozen (Start / control > Gaming mode off).")
-        if playing != self.gaming_was and self.gaming_was is not None and self.tray and                 time.time() - self.switched_at > 20:  # switched elsewhere (hotkey, Claude): Khaltron's own say so
-            self.tray.notify("Gaming mode " + ("ON" if playing else "OFF"),
-                             "Background jobs frozen, voice off. Have fun!" if playing else "Background jobs carry on.")
-        self.gaming_was = playing
-        developing = devmode.is_on()
         if not self.dev_busy:
             self.show_dev(developing)
         if developing:
             flags.append("DEVELOPMENT MODE is on: background jobs frozen, Claude / terminal / Stable Diffusion "
                          "boosted, other apps lowered (the header's DEV MODE button switches it off).")
-        if developing != self.dev_was and self.dev_was is not None and self.tray and                 time.time() - self.switched_at > 20:  # switched elsewhere (hotkey, Claude)
-            self.tray.notify("Development mode " + ("ON" if developing else "OFF"),
-                             "Your work comes first; background jobs frozen." if developing
-                             else "Everything is back as it was.")
-        self.dev_was = developing
         if state.stage2_paused and any(j.source == "Stage 2" for j in state.waiting):
             flags.append("Stage 2 is paused (Start / control > Resume stage 2).")
         if state.queue_paused:
@@ -494,11 +526,6 @@ class App:
                                    + ("Nothing is running." if idle else f"{len(state.running)} running, "
                                       f"{len(state.waiting)} waiting.")
                                    + f"  Planned queue runner: {'on' if runner.is_running() else 'off'}.")
-        if self.tray:
-            self.tray.set_tooltip(f"{theme.NAME}: {len(state.running)} running, {len(state.waiting)} waiting")
-        for title, message in self.watcher.changes(state):
-            if self.alerts_on and self.tray:
-                self.tray.notify(title, message)
 
     # --- actions ---------------------------------------------------------------------------------------------
     def act(self, job: Job, action: str):
@@ -635,6 +662,7 @@ class App:
             self.quit()
             return
         self.root.withdraw()
+        self.visible = False
         if not self.hidden_once:
             self.hidden_once = True
             self.tray.notify(f"{theme.NAME} is still watching", "It's in the tray by the clock. Right-click it to quit.")
@@ -643,6 +671,22 @@ class App:
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
+        self.shown()
+
+    def shown(self, _event=None):
+        """Visible again (shown from the tray, or restored after minimising): draw what waited, then fresh data."""
+        if _event is not None and _event.widget is not self.root:
+            return
+        was = self.visible
+        self.visible = True
+        if self.pending is not None:
+            self.draw(self.pending)
+        if not was:
+            self.wake.set()
+
+    def minimised(self, event):
+        if event.widget is self.root:
+            self.visible = False
 
     def quit(self):
         if self.tray:

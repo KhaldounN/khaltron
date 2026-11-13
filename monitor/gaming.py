@@ -70,11 +70,23 @@ def set_power_mode(mode: str) -> bool:
 
 
 # --- finding and freezing jobs -------------------------------------------------------------------------------------
+_cmdlines: dict[tuple[int, float], str] = {}  # (pid, start time) -> command line: a running program's never changes
+
+
 def _cmdline(process: psutil.Process) -> str:
+    started = (getattr(process, "info", None) or {}).get("create_time")
+    key = (process.pid, started) if started else None
+    if key and key in _cmdlines:
+        return _cmdlines[key]
     try:
-        return " ".join(process.cmdline())
+        found = " ".join(process.cmdline())
     except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return ""
+        found = ""
+    if key:
+        if len(_cmdlines) > 2000:
+            _cmdlines.clear()
+        _cmdlines[key] = found
+    return found
 
 
 def _extras(process: psutil.Process, name: str, cmdline: str) -> str | None:
@@ -112,7 +124,7 @@ def _job_processes(website_too: bool = True) -> list[psutil.Process]:
     """Every process gaming mode freezes: known job scripts, whatever planned jobs are running (and their
     children), and the safe extras (_extras). Development mode passes website_too=False (the site keeps running)."""
     found: dict[int, psutil.Process] = {}
-    for process in psutil.process_iter(["name"]):
+    for process in psutil.process_iter(["name", "create_time"]):
         name = (process.info.get("name") or "").lower()
         if name in EXTRA_APPS:
             found[process.pid] = process

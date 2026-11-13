@@ -62,19 +62,26 @@ def is_on() -> bool:
 
 # --- the process snapshot --------------------------------------------------------------------------------------
 _cmdlines: dict[tuple[int, float], str] = {}
+_exes: dict[tuple[int, float], str] = {}
 
 
 class Snapshot:
     """Every process once: parent, name, program path, start time (command lines only when needed, cached)."""
 
-    def __init__(self):
+    def __init__(self, samples: dict | None = None):
+        """samples: the Job Monitor's own process sample of this refresh (programs.sample(): one quick Windows call
+        with name, parent and start time), so nothing is scanned twice. Without it (the command line), psutil."""
         self.info: dict[int, dict] = {}
-        # no program paths here: asking for every process's path takes seconds (Windows refuses many slowly)
-        for process in psutil.process_iter(["ppid", "name", "create_time"]):
-            info = process.info
-            info["name"] = (info.get("name") or "").lower()
-            info["create_time"] = info.get("create_time") or 0.0
-            self.info[process.pid] = info
+        if samples:
+            for pid, item in samples.items():
+                self.info[pid] = {"name": (item.name or "").lower(), "ppid": item.ppid, "create_time": item.started}
+        else:
+            # no program paths here: asking for every process's path takes seconds (Windows refuses many slowly)
+            for process in psutil.process_iter(["ppid", "name", "create_time"]):
+                info = process.info
+                info["name"] = (info.get("name") or "").lower()
+                info["create_time"] = info.get("create_time") or 0.0
+                self.info[process.pid] = info
         self.children: dict[int, list[int]] = {}
         for pid, info in self.info.items():
             parent = self.info.get(info.get("ppid"))
@@ -85,15 +92,21 @@ class Snapshot:
         live = {(pid, i["create_time"]) for pid, i in self.info.items()}
         if len(_cmdlines) > 2 * max(1, len(live)):
             _cmdlines = {k: v for k, v in _cmdlines.items() if k in live}
+        global _exes
+        if len(_exes) > 2 * max(1, len(live)):
+            _exes = {k: v for k, v in _exes.items() if k in live}
 
     def exe(self, pid: int) -> str:
         """The program's path, lower case ("" if Windows won't say). Only asked for when needed."""
         info = self.info.get(pid, {})
         if "exe" not in info:
-            try:
-                info["exe"] = (psutil.Process(pid).exe() or "").lower()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
-                info["exe"] = ""
+            key = (pid, info.get("create_time", 0.0))
+            if key not in _exes:  # kept between refreshes: a program's path never changes
+                try:
+                    _exes[key] = (psutil.Process(pid).exe() or "").lower()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+                    _exes[key] = ""
+            info["exe"] = _exes[key]
         return info.get("exe", "")
 
     def cmdline(self, pid: int) -> str:
@@ -258,10 +271,16 @@ def _adjust(state: dict, snap: Snapshot | None = None, windows: set[int] | None 
     helpers = {pid: INPUT_HELPERS[i["name"]] for pid, i in snap.info.items() if i["name"] in INPUT_HELPERS}
     boosted, lowered = [], []
     for pid, why in {**helpers, **work}.items():
+        # boost only the main programs (Claude, terminal, editor, ComfyUI and its workers), not every short command
+        # Claude runs: those were dozens of priority changes a minute for no gain (they are still never frozen)
+        if why != "Stable Diffusion" and snap.info[pid]["name"] not in WORK_NAMES | set(INPUT_HELPERS):
+            continue
         created = snap.info[pid]["create_time"]
+        if (pid, created) in done or pid in frozen:
+            continue
         now = _priority(pid)
         # only normal / above normal: something set lower on purpose (a long job at below normal) stays so
-        if (pid, created) in done or pid in frozen or now not in (NORMAL, ABOVE) or now == BOOST:
+        if now not in (NORMAL, ABOVE) or now == BOOST:
             continue
         if _set(state, "boosted", pid, created, why, now, BOOST):
             boosted.append(why)
@@ -390,9 +409,11 @@ def turn_off() -> str:
         return _turn_off() if got else _busy()
 
 
-def enforce() -> list[str]:
+def enforce(samples: dict | None = None) -> list[str]:
     """While development mode is on: freeze jobs that started since, boost what Claude / ComfyUI started since,
-    lower programs opened since. Returns the newly frozen jobs (the only ones worth a notification)."""
+    lower programs opened since. Returns the newly frozen jobs (the only ones worth a notification).
+    samples: the Job Monitor's process sample of this refresh (no second scan). It calls this every
+    config "mode_check_seconds" (15 s), not every refresh: every 2 s was a constant load on a busy PC."""
     if not is_on():
         return []
     with gaming._locked(wait=0) as got:
@@ -400,7 +421,7 @@ def enforce() -> list[str]:
         if not isinstance(state, dict):
             return []
         state.setdefault("frozen", [])
-        snap = Snapshot()
+        snap = Snapshot(samples)
         frozen = gaming._freeze_new(state, website_too=False, skip=_skip_work(snap))
         boosted, lowered = _adjust(state, snap)
         # forget what has ended, so the file doesn't grow all day (Claude starts many short commands)

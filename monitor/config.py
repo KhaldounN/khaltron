@@ -13,6 +13,7 @@ DEFAULTS = {
     # the Book Analyzer project, if you have it (its views switch themselves off when the folder isn't there)
     "book_analyzer": str(HOME.parent / "book analyzer v2"),
     "refresh_seconds": 2,           # how often the window re-reads everything
+    "hidden_refresh_seconds": 6,    # ... while it is hidden in the tray (alerts still come; nothing is redrawn)
     "slow_refresh_seconds": 60,     # scheduled tasks and the library count (slower to read)
     "low_memory_mb": 1500,          # below this the memory bar turns red and a warning pops up (stage 2's own limit)
     "heavy_process_mb": 300,        # a python process using more memory than this is listed
@@ -53,6 +54,8 @@ DEFAULTS = {
     "dev_keep": [],
     "dev_keep_folders": ["stablediffusion", "comfyui", "stable-diffusion-webui"],
     "dev_boost": "above_normal",
+    # while gaming or development mode is on, how often the window re-checks for new jobs and programs (seconds)
+    "mode_check_seconds": 15,
     "dev_sound": True,              # development mode's start-up sound (assets/khaltron-dev-mode.wav) and volume
     "dev_sound_volume": 0.8,
     "port": 59126,                 # a second launch tells the first window to show itself through this port

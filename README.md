@@ -37,7 +37,7 @@ then lets everything carry on where it left off when you're done.
 **Development mode**
 - **One click** on the header's DEV MODE button (or Ctrl+Alt+D) puts your work first: Claude and everything it
   runs, your terminal, VS Code and Stable Diffusion get high priority; background jobs are frozen; other apps keep
-  running, lowered. The raccoon turns yellow and a one-second power-up hum plays.
+  running, lowered. The raccoon turns yellow and a short run of digital chirps plays.
 
 **Stays out of your way**
 - Lives in the tray by the clock and can start with Windows.
@@ -180,7 +180,9 @@ Stable Diffusion folder (ComfyUI) with what it starts. Every other program **wit
 lowered to *below normal*: it keeps working but always gives way; nothing with a window is frozen, so nothing looks
 crashed. Browsers are never lowered (artifacts, docs and test pages open there), and the app in front (the one you
 are typing in) is never lowered either: it goes back to normal while you use it. Windows' power mode goes to Best performance. A planned job is background work even when Claude queued it.
-While it is on, every refresh freezes new jobs, boosts what your work started since and lowers newly opened programs.
+While it is on, every 15 s (`mode_check_seconds`) it freezes new jobs, boosts new main programs and lowers newly
+opened ones, using the window's own process list (no second scan). Only the main programs are boosted (Claude,
+terminal, editor, ComfyUI); the short commands Claude runs are never frozen but left at normal.
 **Off** resumes the frozen jobs and sets back every priority it changed (unless you changed one yourself meanwhile).
 The switch file is `state\dev-mode.json` (setting `dev_flag`); every switch is logged in `state\devmode.log`.
 Gaming mode and development mode never run together: switching one on switches the other off first, and auto gaming
