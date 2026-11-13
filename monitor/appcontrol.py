@@ -189,5 +189,7 @@ def end(name: str, pids: list[int]) -> str:
     for process in _processes(pids):
         result = subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True,
                                 creationflags=NO_WINDOW)
-        ended += result.returncode == 0
+        # judged by the result, not only taskkill's answer: a launcher that exits by itself once its child is ended
+        # (a venv's python.exe does) makes taskkill report "not found" although the program did end
+        ended += result.returncode == 0 or not process.is_running()
     return f"Ended {name}." if ended else f"{name} had already closed."
