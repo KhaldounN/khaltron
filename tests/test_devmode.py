@@ -114,7 +114,7 @@ def test_what_counts_as_work_and_what_is_lowered(monkeypatch):
     assert work[8] == work[9] == "Stable Diffusion"
     assert not {5, 12, 6, 7, 11, 10} & set(work)
     lowered = devmode.lower_pids(snap, work, windows={2, 5, 8, 10})
-    assert set(lowered) == {5, 12, 10}  # your work and Claude are never lowered
+    assert set(lowered) == {10}  # your work, Claude and browsers (artifacts, docs, testing) are never lowered
 
 
 # --- the real switch on stand-in processes ---------------------------------------------------------------------

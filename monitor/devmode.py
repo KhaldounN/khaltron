@@ -48,7 +48,8 @@ WORK_NAMES = {n.lower() for n in ["claude.exe", "windowsterminal.exe", "code.exe
 WORK_FOLDERS = [f.lower() for f in CONFIG.get("dev_keep_folders", ["stablediffusion", "comfyui",
                                                                    "stable-diffusion-webui"])]
 SCRIPT_HOSTS = ("python", "pythonw", "cmd.exe", "powershell", "pwsh")  # their command line says what they run
-# a browser started from your terminal or editor is everyday browsing, not work: only Claude's own count
+# browsers: never lowered (artifacts, docs and test pages open there: lowered, they opened slowly, 2026-11-13); a
+# browser started from your terminal is not boosted either, only the ones Claude started
 BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "iexplore.exe"}
 NEVER_LOWER = NEVER_NAMES | {"explorer.exe", "dwm.exe", "taskmgr.exe", "searchhost.exe", "startmenuexperiencehost.exe",
                              "shellexperiencehost.exe", "textinputhost.exe", "lockapp.exe", "systemsettings.exe",
@@ -192,7 +193,7 @@ def lower_pids(snap: Snapshot, work: dict[int, str], windows: set[int] | None = 
     found: dict[int, str] = {}
     for pid in windows:
         info = snap.info.get(pid)
-        if not info or stop(pid) or info["name"] in NEVER_LOWER or not snap.exe(pid) \
+        if not info or stop(pid) or info["name"] in NEVER_LOWER or info["name"] in BROWSERS or not snap.exe(pid) \
                 or snap.exe(pid).startswith(WINDOWS_DIR.lower()):
             continue
         label = os.path.splitext(info["name"])[0]

@@ -178,7 +178,8 @@ Analyzer website or the read-aloud voice. It gives **above normal** priority to 
 started (node, python, shells, dev servers, its test browsers), Windows Terminal, VS Code, git, and anything run from a
 Stable Diffusion folder (ComfyUI) with what it starts. Every other program **with a window** (browsers, chat...) is
 lowered to *below normal*: it keeps working but always gives way; nothing with a window is frozen, so nothing looks
-crashed. The app in front (the one you are typing in) is never lowered: it goes back to normal while you use it. Windows' power mode goes to Best performance. A planned job is background work even when Claude queued it.
+crashed. Browsers are never lowered (artifacts, docs and test pages open there), and the app in front (the one you
+are typing in) is never lowered either: it goes back to normal while you use it. Windows' power mode goes to Best performance. A planned job is background work even when Claude queued it.
 While it is on, every refresh freezes new jobs, boosts what your work started since and lowers newly opened programs.
 **Off** resumes the frozen jobs and sets back every priority it changed (unless you changed one yourself meanwhile).
 The switch file is `state\dev-mode.json` (setting `dev_flag`); every switch is logged in `state\devmode.log`.
