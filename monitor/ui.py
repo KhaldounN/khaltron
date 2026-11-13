@@ -429,7 +429,7 @@ class App:
             self.gpu_card.update_value(0, "-", "no NVIDIA graphics card\nfound", theme.MUTED)
             return
         colour = RED if g.load > 90 else AMBER if g.load > 60 else GREEN
-        memory = f"{gb(g.used_mb)} / {gb(g.total_mb)} video memory" if g.total_mb else "video memory unknown"
+        memory = f"{gb(g.used_mb)} / {gb(g.total_mb)} VRAM" if g.total_mb else "VRAM unknown"  # short: it shares the card with the graph
         heat = f"  {g.temp_c}°C" if g.temp_c is not None else ""
         self.gpu_card.update_value(g.load / 100, f"{g.load:.0f}%", f"{memory}\n{g.name}{heat}", colour)
 

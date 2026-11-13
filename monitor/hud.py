@@ -93,7 +93,8 @@ class StatCard(tk.Canvas):
             xy = [(start + i * step, gy1 - (gy1 - gy0) * v) for i, v in enumerate(points)]
             self.create_polygon(xy[0][0], gy1, *[c for p in xy for c in p], xy[-1][0], gy1,
                                 fill=self.colour, outline="", stipple="gray25")
-            self.create_line(*[c for p in xy for c in p], fill=self.colour, width=2, smooth=True)
+            # no smooth=True: 90 points in ~150 px look the same, and smoothing was 3/4 of the cards' drawing time
+            self.create_line(*[c for p in xy for c in p], fill=self.colour, width=2)
             x, y = xy[-1]
             self.create_oval(x - 3, y - 3, x + 3, y + 3, fill=theme.TEXT, outline=self.colour, width=2)
         # the words
@@ -194,6 +195,18 @@ class JobCard(tk.Frame):
             "pct": bar.create_text(0, 6, text="", font=(theme.MONO, 8, "bold"), fill=theme.TEXT),
         }
         self.shown_pct = None
+        self.last = {}  # what each shape shows now: changes only when this differs (each change repaints)
+
+    def _put(self, key: str, coords=None, **options):
+        """Move / recolour one shape of the bar, but only if that changes something."""
+        bar, item, last = self.bar, self.items[key], self.last
+        if coords is not None and last.get((key, "xy")) != coords:
+            bar.coords(item, *coords)
+            last[(key, "xy")] = coords
+        changed = {k: v for k, v in options.items() if last.get((key, k)) != v}
+        if changed:
+            bar.itemconfigure(item, **changed)
+            last.update({(key, k): v for k, v in changed.items()})
 
     def animate(self, t: float):
         """The progress bar: a glowing fill with a bright head. When progress is unknown (a planned job, say) only
@@ -204,28 +217,21 @@ class JobCard(tk.Frame):
             return
         if not hasattr(self, "items"):
             self._bar_items()
-        items = self.items
-        bar.coords(items["track"], 0, 3, w, 9)
+        put = self._put
+        put("track", (0, 3, w, 9))
         progress = self.job.progress
         colour = getattr(self, "colour", theme.GREEN)
         unknown = progress is None
         for key in ("halo", "fill", "head", "pct"):
-            bar.itemconfigure(items[key], state="hidden" if unknown else "normal")
+            put(key, state="hidden" if unknown else "normal")
         if unknown:
             return
-        fill = max(2, w * max(0.0, min(1.0, progress)))
-        glow = 0.55 + 0.45 * math.sin(t * 3)
-        bar.coords(items["halo"], 0, 1, fill, 11)
-        bar.itemconfigure(items["halo"], fill=theme.mix(theme.PANEL, colour, 0.25 * glow))
-        bar.coords(items["fill"], 0, 3, fill, 9)
-        bar.itemconfigure(items["fill"], fill=theme.mix(theme.mix(theme.BG, colour, 0.55), colour, glow))
-        bar.coords(items["head"], fill - 3, 0, fill, 12)
-        text = f"{progress * 100:.0f}%"
-        if text != self.shown_pct:
-            self.shown_pct = text
-            bar.itemconfigure(items["pct"], text=text)
-        bar.coords(items["pct"], min(fill + 6, w - 4), 6)
-        bar.itemconfigure(items["pct"], anchor="w" if fill + 40 < w else "e")
+        fill = round(max(2, w * max(0.0, min(1.0, progress))))
+        glow = round(0.55 + 0.45 * math.sin(t * 3), 2)  # rounded: tiny steps nobody sees are not repainted
+        put("halo", (0, 1, fill, 11), fill=theme.mix(theme.PANEL, colour, 0.25 * glow))
+        put("fill", (0, 3, fill, 9), fill=theme.mix(theme.mix(theme.BG, colour, 0.55), colour, glow))
+        put("head", (fill - 3, 0, fill, 12))
+        put("pct", (min(fill + 6, w - 4), 6), text=f"{progress * 100:.0f}%", anchor="w" if fill + 40 < w else "e")
 
 
 class RunningPanel(tk.Frame):
@@ -296,7 +302,9 @@ class RunningPanel(tk.Frame):
                 t = time.time() - self.started
                 for card in self.cards.values():
                     card.animate(t)
-            self.after(theme.pace(self, 66), self.tick)  # 15 frames a second while you look at it
+            # 5 frames a second while you look at it: the glow is a slow 2-second pulse (15 a second cost ~5% of a
+            # CPU core for two cards, 2026-11-13)
+            self.after(theme.pace(self, 200, background=600), self.tick)
         except tk.TclError:
             pass
 

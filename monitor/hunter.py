@@ -689,7 +689,8 @@ class KhaltronHeader(tk.Canvas):
                 self._frame(time.time() - self.started)
             busy = (self.hunt and self.phase != "locked") or self.flash or self.gaze.get("to") and                 time.time() - self.gaze["since"] < .6
             fast = self.FRAME_MS if busy else self.CALM_MS
-            delay = 700 if self.phase == "locked" else theme.pace(self, fast, background=450)
+            # another window has the focus: calm frames once a second (the gaming sequence keeps its pace)
+            delay = 700 if self.phase == "locked" else theme.pace(self, fast, background=fast if busy else 1000)
             self.after(delay, self._tick)
         except tk.TclError:
             return
