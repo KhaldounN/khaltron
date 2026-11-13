@@ -1,20 +1,17 @@
-"""Makes assets/khaltron-dev-mode.wav: development mode's start-up sound (2026-11-13), built from plain sine and
-square waves so it is ours (no licence). About 2.3 s, 44.1 kHz stereo, 16-bit:
-  0.00-0.95 s  a power-up whir: a low hum rising 70 -> 440 Hz, with a servo-like flutter
-  0.70-1.40 s  a run of quick digital chirps, hopping left and right (data, a computer booting)
-  1.40-2.30 s  an "online" chime: two rising bell notes (E5, B5)
+"""Makes assets/khaltron-dev-mode.wav: development mode's start-up sound (2026-11-13), built from plain sine waves
+so it is ours (no licence). 0.95 s, 44.1 kHz stereo, 16-bit: a power-up whir, a low hum rising 70 -> 440 Hz with a
+servo-like flutter. (It first had digital chirps and an "online" chime after it, 2.3 s in all; the owner kept only
+the whir, 2026-11-13.)
 Run:  .venv\\Scripts\\python.exe tools\\make_dev_sound.py   (change the numbers below and run it again)"""
 
 import array
 import math
-import random
 import wave
 from pathlib import Path
 
 RATE = 44100
-LENGTH = 2.3
+LENGTH = 0.95
 OUT = Path(__file__).resolve().parent.parent / "assets" / "khaltron-dev-mode.wav"
-random.seed(9000)  # the same sound every time
 
 left = [0.0] * int(RATE * LENGTH)
 right = [0.0] * int(RATE * LENGTH)
@@ -50,27 +47,6 @@ def whir(t, k):
 
 
 add(0.0, 0.95, whir)
-
-# 2. digital chirps: short soft-square blips on a pentatonic scale, high, hopping between the ears
-SCALE = [1046.5, 1174.7, 1318.5, 1568.0, 1760.0, 2093.0, 2349.3, 2637.0]
-for n in range(10):
-    freq = random.choice(SCALE)
-    start = 0.70 + n * 0.068
-
-    def blip(t, k, f=freq):
-        square = sum(math.sin(2 * math.pi * f * h * t) / h for h in (1, 3, 5))  # rounded square: a retro beep
-        return .10 * square * envelope(k, .08, .5)
-
-    add(start, 0.05, blip, pan=-.6 if n % 2 else .6)
-
-# 3. the "online" chime: two bell-like notes, each a sine with a quiet octave and a gentle decay
-for start, freq in ((1.40, 659.3), (1.58, 987.8)):
-    def bell(t, k, f=freq):
-        tone = math.sin(2 * math.pi * f * t) + .35 * math.sin(2 * math.pi * 2 * f * t) \
-            + .12 * math.sin(2 * math.pi * 3.01 * f * t)
-        return .26 * tone * math.exp(-4.2 * t) * min(1.0, t / .004)
-
-    add(start, LENGTH - start, bell)
 
 # normalise to -1 dBFS and write
 peak = max(max(abs(v) for v in left), max(abs(v) for v in right)) or 1.0

@@ -37,7 +37,7 @@ then lets everything carry on where it left off when you're done.
 **Development mode**
 - **One click** on the header's DEV MODE button (or Ctrl+Alt+D) puts your work first: Claude and everything it
   runs, your terminal, VS Code and Stable Diffusion get high priority; background jobs are frozen; other apps keep
-  running, lowered. The raccoon turns yellow and a short power-up sound plays.
+  running, lowered. The raccoon turns yellow and a one-second power-up hum plays.
 
 **Stays out of your way**
 - Lives in the tray by the clock and can start with Windows.
