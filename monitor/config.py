@@ -16,6 +16,7 @@ DEFAULTS = {
     "hidden_refresh_seconds": 6,    # ... while it is hidden in the tray (alerts still come; nothing is redrawn)
     "slow_refresh_seconds": 60,     # scheduled tasks and the library count (slower to read)
     "low_memory_mb": 1500,          # below this the memory bar turns red and a warning pops up (stage 2's own limit)
+    "memory_guard_mb": 2048,        # the planned queue starts a new job only with this much RAM free (0 = no guard)
     "heavy_process_mb": 300,        # a python process using more memory than this is listed
     "heavy_process_cpu": 20,        # ... or more CPU (percent of one core) than this
     "scheduled_tasks": ["Khaltron 9000"],  # Windows scheduled tasks to show (add your own)
@@ -53,6 +54,7 @@ DEFAULTS = {
     "dev_flag": str(STATE / "dev-mode.json"),
     "dev_keep": [],
     "dev_keep_folders": ["stablediffusion", "comfyui", "stable-diffusion-webui"],
+    "dev_priorities": False,        # development mode also boosts your work and lowers other apps (off: memory only)
     "dev_boost": "above_normal",
     # while gaming or development mode is on, how often the window re-checks for new jobs and programs (seconds)
     "mode_check_seconds": 15,

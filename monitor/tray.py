@@ -21,6 +21,8 @@ class Tray:
                              checked=lambda _: gaming.is_on()),
             pystray.MenuItem("Development mode", lambda: self.results.put(("devmode", None)),
                              checked=lambda _: devmode.is_on()),
+            pystray.MenuItem("Lite look (a still header)", lambda: self.results.put(("lite", None)),
+                             checked=lambda _: getattr(self.app_ref(), "lite_on", False)),
             pystray.MenuItem("Auto gaming mode (when a game starts)", lambda: self.results.put(("auto_gaming", None)),
                              checked=lambda _: autogame.enabled()),
             pystray.MenuItem("Alerts", self.toggle_alerts, checked=lambda _: self.app_ref().alerts_on),

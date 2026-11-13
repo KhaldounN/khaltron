@@ -14,9 +14,9 @@ from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
 from .collect import State, collect
 from .sources import gpu as gpu_source
-from .config import BOOK, CONFIG, HAS_BOOK
+from .config import BOOK, CONFIG, HAS_BOOK, STATE
 from .model import DONE, FAILED, PAUSED, RUNNING, STOPPED, WAITING, Job
-from .util import duration, read_json, when
+from .util import duration, read_json, when, write_json
 
 GREEN, AMBER, RED, GREY = theme.GREEN, theme.AMBER, theme.RED, theme.MUTED
 SEGMENTS = 20  # the RAM and CPU gauges are drawn as rows of segments
@@ -64,6 +64,8 @@ def program_row(program, control=None) -> Job:
     allowed = control.allowed if control else []
     paused = bool(control and control.paused)
     actions_ = (["resume_app", "end_app"] if paused else ["pause_app", "close_app", "end_app"]) if allowed else []
+    if allowed:  # your work list (monitor/mywork.py): gaming and development mode leave these programs alone
+        actions_ = actions_ + (["unkeep_app"] if control and control.mine else ["keep_app"])
     return Job(id=f"app:{program.name}", name=program.name, source="Windows" if windows else "You",
                state=PAUSED if paused else DONE if windows else WAITING, cpu=program.cpu, memory_mb=program.memory_mb,
                actions=actions_, step="" if allowed or windows else (control.reason if control else ""),
@@ -170,6 +172,9 @@ class Table(ttk.Frame):
         self.enable()
 
 
+LITE = STATE / "lite.json"  # the lite look (a still header) you chose
+
+
 class App:
     def __init__(self, root: tk.Tk, tray=None, start_hidden: bool = False):
         self.root, self.tray = root, tray
@@ -184,6 +189,8 @@ class App:
         self.dev_busy = False   # development mode is switching in the background
         self.visible = not start_hidden  # hidden in the tray: no redrawing, slower refresh
         self.pending = None              # the newest state, drawn when the window is shown again
+        self.lite_on = bool((read_json(LITE, {}) or {}).get("on", False))  # the still header, chosen by you
+        self.busy_count = 0              # refreshes in a row with the CPU over 85% (the header goes still)
         root.bind("<Unmap>", self.minimised, add="+")  # minimised counts as hidden too
         root.bind("<Map>", self.shown, add="+")
         self.autogame = autogame.Watcher()
@@ -197,6 +204,7 @@ class App:
         theme.dark_title_bar(root)
         if start_hidden:
             root.withdraw()
+        threading.Thread(target=self.recover_modes, daemon=True).start()
         threading.Thread(target=self.reader, daemon=True).start()
         root.after(200, self.poll)
 
@@ -232,6 +240,7 @@ class App:
         menu.add_separator()
         menu.add_command(label="Gaming mode on / off (Ctrl+Alt+G)", command=self.toggle_gaming)
         menu.add_command(label="Development mode on / off (Ctrl+Alt+D)", command=self.toggle_dev)
+        menu.add_command(label="Lite look on / off (a still header)", command=lambda: self.set_lite(not self.lite_on))
         menu.add_separator()
         if HAS_BOOK:
             menu.add_command(label="Open the Book Analyzer results folder",
@@ -301,7 +310,7 @@ class App:
         self.apps = Table(tabs, self, [("name", "Program", 300), ("who", "Started by", 90), ("count", "Processes", 80),
                                        ("cpu", "CPU", 60), ("share", "Share of the CPU", 170), ("memory", "RAM", 80),
                                        ("rshare", "Share of the RAM", 170), ("step", "Note", 200)],
-                          ["pause_app", "resume_app", "close_app", "end_app"], height=8)
+                          ["pause_app", "resume_app", "close_app", "end_app", "keep_app", "unkeep_app"], height=8)
         self.finished = Table(tabs, self, [("name", "Job", 270), ("source", "From", 110), ("state", "Result", 80),
                                            ("step", "Details", 380), ("when", "Ended", 90)], ["log"], height=8)
         self.tasks = Table(tabs, self, [("name", "Task", 250), ("state", "State", 80), ("step", "Status", 330),
@@ -366,6 +375,18 @@ class App:
             self.wake.wait(CONFIG["refresh_seconds"] if self.visible else CONFIG.get("hidden_refresh_seconds", 6))
             self.wake.clear()
 
+    def recover_modes(self):
+        """At start: a gaming or development mode left 'on' by a crash or restart is switched off properly."""
+        for name, module in (("Gaming mode", gaming), ("Development mode", devmode)):
+            try:
+                done = module.recover()
+            except Exception as error:  # noqa: BLE001
+                done = None
+                self.results.put(("message", f"{name} clean-up failed: {error}"))
+            if done:
+                self.results.put(("notify", (f"{name} was left on by a restart",
+                                             "Switched off properly: the queue and power mode are back.")))
+
     def check_modes(self, samples: dict):
         """While gaming or development mode is on: freeze jobs that started anyway, and (development mode) boost or
         lower what is new. Every config "mode_check_seconds" (15 s), with this refresh's process sample: checking
@@ -407,6 +428,8 @@ class App:
                 elif kind == "dev_done":
                     self.dev_busy = False
                     self.show_dev(devmode.is_on())
+                elif kind == "lite":
+                    self.set_lite(not self.lite_on)
                 elif kind == "devmode":
                     self.toggle_dev()
                 elif kind == "auto_gaming":
@@ -421,6 +444,15 @@ class App:
         self.root.after(200, self.poll)
 
     # --- drawing ---------------------------------------------------------------------------------------------
+    def set_lite(self, on: bool):
+        """The lite look: a still header (remembered in state/lite.json). It also comes on by itself while the PC is
+        very busy; this is your own choice on top of that."""
+        self.lite_on = on
+        write_json(LITE, {"on": on})
+        self.header.set_lite(on or self.busy_count >= 3)
+        self.status.configure(text="Lite look ON: the header stays still (less CPU)." if on
+                              else "Lite look OFF: the header moves again (it still goes still when the PC is very busy).")
+
     def show_gpu(self):
         """The GPU card: how busy the graphics card is, its video memory and temperature (sources/gpu.py, ~1 ms).
         Read here, so only while the window is visible: asking a laptop's sleeping graphics card wakes it."""
@@ -477,6 +509,9 @@ class App:
                                        + (f"\nbusiest: {busiest} {top_app.cpu:.0f}%" if top_app else ""),
                                        cpu_colour)
             self.show_gpu()
+            # very busy (CPU over 85% three refreshes running): the header goes still until it calms down (<70%)
+            self.busy_count = self.busy_count + 1 if h.cpu > 85 else 0 if h.cpu < 70 else self.busy_count
+            self.header.set_lite(self.lite_on or self.busy_count >= 3)
             others = max(0, h.used_mb - state.jobs_mb)
             self.jobs_card.update_value(state.jobs_cpu / 100, f"{state.jobs_cpu:.0f}%  {gb(state.jobs_mb) or '0 MB'}",
                                         f"CPU and RAM of {len(state.running)} running\nall else: {gb(others)} RAM",
@@ -491,8 +526,8 @@ class App:
         if not self.dev_busy:
             self.show_dev(developing)
         if developing:
-            flags.append("DEVELOPMENT MODE is on: background jobs frozen, Claude / terminal / Stable Diffusion "
-                         "boosted, other apps lowered (the header's DEV MODE button switches it off).")
+            flags.append("DEVELOPMENT MODE is on: background jobs frozen, background apps in efficiency mode, the "
+                         "memory goes to your work (the header's DEV MODE button switches it off).")
         if state.stage2_paused and any(j.source == "Stage 2" for j in state.waiting):
             flags.append("Stage 2 is paused (Start / control > Resume stage 2).")
         if state.queue_paused:
@@ -507,7 +542,8 @@ class App:
         self.running.show(state.running, now)
         self.next_list.show(state.waiting)
         self.next_title.count(len(state.waiting))
-        frozen = {item["pid"] for item in (read_json(gaming.FLAG, {}) or {}).get("frozen", [])} if playing else set()
+        held = (read_json(gaming.FLAG, {}) or {}) if playing else {}
+        frozen = {item["pid"] for item in held.get("frozen", []) + held.get("eco", [])}  # frozen or slowed down
         self.programs = state.programs
         apps = [a for a in state.programs if a.yours and not a.name.startswith("Windows")]
         apps.sort(key=lambda a: (-round(a.cpu), -a.memory_mb))
@@ -589,11 +625,11 @@ class App:
                 self.results.put(("gaming_done", None))
                 self.wake.set()
             lines = message.splitlines()
-            frozen = [line for line in lines if line.startswith("- Frozen:")]
+            frozen = [line for line in lines if line.startswith(("- Frozen:", "- Efficiency mode"))]
             if lines[0].startswith("Gaming mode ON") and not frozen:
                 body = "Nothing to pause: no background jobs are running. Your apps and Windows are left alone."
             else:
-                body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+                body = (f"{len(frozen)} job(s) or app(s) paused. " if frozen else "") + lines[-1]
             self.results.put(("notify", (lines[0], body)))
             return lines[0] + "  " + lines[-1]
         self.run_in_background(do)
@@ -613,11 +649,11 @@ class App:
                 self.results.put(("gaming_done", None))
                 self.wake.set()
             lines = message.splitlines()
-            frozen = [line for line in lines if line.startswith("- Frozen:")]
+            frozen = [line for line in lines if line.startswith(("- Frozen:", "- Efficiency mode"))]
             if lines[0].startswith("Gaming mode ON") and not frozen:
                 body = "Nothing to pause: no background jobs are running. Your apps and Windows are left alone."
             else:
-                body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+                body = (f"{len(frozen)} job(s) or app(s) paused. " if frozen else "") + lines[-1]
             self.results.put(("notify", (lines[0], body)))
             return lines[0] + "  " + lines[-1]
         self.run_in_background(do)

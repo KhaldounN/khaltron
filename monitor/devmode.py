@@ -24,7 +24,7 @@ from pathlib import Path
 
 import psutil
 
-from . import gaming, planned
+from . import gaming, mywork, planned
 from .appcontrol import NEVER_NAMES, WINDOWS_DIR
 from .config import CONFIG, STATE
 from .util import read_json, write_json
@@ -37,6 +37,7 @@ NORMAL, ABOVE, BELOW, HIGH = 0x20, 0x8000, 0x4000, 0x80
 PRIORITY_NAMES = {0x40: "idle", BELOW: "below normal", NORMAL: "normal", ABOVE: "above normal", HIGH: "high",
                   0x100: "realtime"}
 # above normal by default: "high" let a busy ComfyUI crowd out typing (2026-11-13)
+PRIORITIES = bool(CONFIG.get("dev_priorities", False))  # boost your work / lower other apps (off: see _adjust)
 BOOST = {"high": HIGH, "above_normal": ABOVE}.get(str(CONFIG.get("dev_boost", "above_normal")).lower(), ABOVE)
 # Windows' typing helpers: boosted with your work, so keys reach your app even when the CPU is full
 INPUT_HELPERS = {"ctfmon.exe": "Typing (Windows)", "textinputhost.exe": "Typing (Windows)"}
@@ -157,8 +158,11 @@ def work_pids(snap: Snapshot) -> dict[int, str]:
         return stop(pid) or snap.info[pid]["name"] in BROWSERS
 
     roots: dict[int, str] = {}
+    yours = mywork.names()  # your work list (Programs tab)
     for pid, info in snap.info.items():
-        if info["name"] in WORK_NAMES:
+        if info["name"] in yours and info["name"] not in WORK_NAMES:
+            roots[pid] = os.path.splitext(info["name"])[0]
+        elif info["name"] in WORK_NAMES:
             roots[pid] = {"claude.exe": "Claude", "windowsterminal.exe": "Terminal", "code.exe": "VS Code"}.get(
                 info["name"], os.path.splitext(info["name"])[0])
         elif is_sd(pid, info) and not stop(pid):
@@ -253,9 +257,14 @@ def _adjust(state: dict, snap: Snapshot | None = None, windows: set[int] | None 
             front: int | None = -1) -> tuple[list, list]:
     """Boost new work processes, lower new windowed programs; record both in `state`. Returns their labels.
     The program in front (the one you are using) is never lowered: if it was, it is set back to normal now, and
-    lowered again once you leave it."""
-    snap = snap or Snapshot()
+    lowered again once you leave it.
+    Off unless config "dev_priorities" is true (2026-11-13): this PC's limit is memory, which priorities don't free,
+    and the juggling itself made typing and opening pages slower. Development mode is about memory now."""
     state.setdefault("boosted", [])
+    state.setdefault("lowered", [])
+    if not PRIORITIES:
+        return [], []
+    snap = snap or Snapshot()
     state.setdefault("lowered", [])
     front = foreground_pid() if front == -1 else front
     in_front = set()
@@ -342,8 +351,10 @@ def _turn_on() -> str:
         planned.pause_queue(True)
         lines.append("- Planned queue paused (no new job starts).")
     snap = Snapshot()
-    frozen = gaming._freeze_new(state, website_too=False, skip=_skip_work(snap))
+    slowed = []
+    frozen = gaming._freeze_new(state, website_too=False, skip=_skip_work(snap), slowed=slowed)
     lines += [f"- Frozen: {f}" for f in frozen] or ["- No background job needed freezing."]
+    lines += [f"- Efficiency mode (still running, slowly): {s}" for s in slowed]
     lines += [f"- Left running: {n} (it watches the keyboard/mouse; frozen, typing would lag)"
               for n in sorted(set(state.get("input_spared", [])))]
     boosted, lowered = _adjust(state, snap)
@@ -369,6 +380,8 @@ def _turn_off() -> str:
     resumed, gone = gaming.wake_frozen(state.get("frozen", []))
     if resumed:
         lines.append(f"- {resumed} frozen job process(es) carry on where they stopped.")
+    if gaming.eco.restore(state.get("eco", [])):
+        lines.append("- Background apps are out of efficiency mode.")
     if gone:
         lines.append(f"- {gone} frozen process(es) were gone (e.g. after a restart); start those jobs again if needed.")
     back = _restore(state.get("boosted", [])) + _restore(state.get("lowered", []))
@@ -407,6 +420,24 @@ def turn_on() -> str:
 def turn_off() -> str:
     with gaming._locked() as got:
         return _turn_off() if got else _busy()
+
+
+def recover() -> str | None:
+    """A mode switched on before the PC last started (a crash, a restart) is not really on any more: everything it
+    froze is gone. Switch it off properly (queue, power mode, the switch file). Returns what was done, or None."""
+    state = read_json(FLAG, None)
+    if not isinstance(state, dict):
+        return None
+    try:
+        booted = psutil.boot_time()
+    except Exception:  # noqa: BLE001
+        return None
+    if state.get("since", booted) >= booted:
+        return None
+    with gaming._locked(wait=10) as got:
+        if not got or not is_on():
+            return None
+        return "Found on after a restart, switched off.\n" + _turn_off()
 
 
 def enforce(samples: dict | None = None) -> list[str]:
@@ -448,6 +479,9 @@ def status() -> str:
 
 def main(argv: list[str]) -> int:
     command = (argv[0] if argv else "status").lower()
+    cleaned = recover()
+    if cleaned:
+        print(cleaned + "\n")
     actions = {"on": turn_on, "off": turn_off, "toggle": toggle, "status": status}
     if command not in actions:
         print("Use: devmode on | off | toggle | status")

@@ -10,12 +10,29 @@ import time
 from pathlib import Path
 
 from . import planned
-from .config import HOME, STATE
+from .config import CONFIG, HOME, STATE
 from .model import DONE, FAILED, RUNNING, STOPPED, WAITING
 from .util import alive, detached
 
 LOCK = STATE / "runner.lock"
 CHECK_SECONDS = 10  # how often a waiting job looks again at what it waits for
+
+
+def memory_short() -> str | None:
+    """The memory guard (2026-11-13): a new job only starts while at least config "memory_guard_mb" (2 GB) of RAM is
+    free. Starting heavy jobs on a nearly full PC is what made it hang and crash. None = enough (or the guard off)."""
+    need = CONFIG.get("memory_guard_mb", 2048)
+    if not need:
+        return None
+    try:
+        import psutil
+        free = psutil.virtual_memory().available / 2 ** 20
+    except Exception:  # noqa: BLE001 - never block the queue because memory couldn't be read
+        return None
+    if free >= need:
+        return None
+    return f"waiting for memory: {free / 1024:.1f} GB free, starts at {need / 1024:.1f} GB"
+
 
 
 def python(console: bool = False) -> str:
@@ -126,7 +143,7 @@ def main() -> None:
             nxt = next((e for e in entries if e.get("managed") and e.get("state") == WAITING), None)
             if nxt is None:
                 return
-            reason = planned.blocked_by(nxt, entries)
+            reason = planned.blocked_by(nxt, entries) or memory_short()
             if reason:
                 if nxt.get("step") != reason:
                     planned.update(nxt["id"], step=reason)

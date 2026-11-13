@@ -25,7 +25,7 @@ from pathlib import Path
 
 import psutil
 
-from . import inputguard, planned
+from . import eco, inputguard, mywork, planned
 from .config import BOOK, CONFIG, STATE
 from .sources.processes import KNOWN
 from .util import NO_WINDOW, read_json, write_json
@@ -163,10 +163,12 @@ def _trim(pid: int) -> None:
             kernel.CloseHandle(handle)
 
 
-def _freeze_new(state: dict, website_too: bool = True, skip=None) -> list[str]:
+def _freeze_new(state: dict, website_too: bool = True, skip=None, slowed: list | None = None) -> list[str]:
     """Suspend job processes not frozen yet; record them in `state`. Returns their descriptions.
+    Background apps (config "gaming_also_freeze": OneDrive, Plex, Widgets...) are not frozen but put in efficiency
+    mode (monitor/eco.py: they keep running, slowly), recorded in state["eco"] and described in `slowed`.
     skip(process) -> True leaves one alone (development mode: whatever Claude or Stable Diffusion runs)."""
-    known = {(p["pid"], p["created"]) for p in state["frozen"]}
+    known = {(p["pid"], p["created"]) for p in state["frozen"] + state.setdefault("eco", [])}
     out = []
     for process in _job_processes(website_too):
         if skip and skip(process):
@@ -181,7 +183,18 @@ def _freeze_new(state: dict, website_too: bool = True, skip=None) -> list[str]:
             name = (getattr(process, "info", None) or {}).get("name") or process.name()
             if inputguard.never_freeze(name):  # it watches the keyboard/mouse: frozen, it would make typing lag
                 continue
-            label = ("Book Analyzer website" if website(cmdline) else None) or \
+            if name.lower() in mywork.names():  # on your work list (Programs tab): never frozen or slowed
+                continue
+            if name.lower() in EXTRA_APPS:  # a background app: efficiency mode, not frozen
+                before = eco.slow_down(process)
+                if before is not None:
+                    _trim(process.pid)
+                    app = EXTRA_APPS[name.lower()]
+                    state["eco"].append({"pid": process.pid, "created": created, "label": app, "before": before})
+                    if slowed is not None:
+                        slowed.append(f"{app} (process {process.pid}, {memory:.0f} MB)")
+                continue
+            label =("Book Analyzer website" if website(cmdline) else None) or \
                 next((lbl for needle, lbl, _ in KNOWN if needle in cmdline), None) or \
                 _extras(process, name.lower(), cmdline) or "Planned job"
             process.suspend()
@@ -268,8 +281,10 @@ def _turn_on(auto: dict | None = None) -> str:
     if not state["queue_was_paused"]:
         planned.pause_queue(True)
         lines.append("- Planned queue paused (no new job starts).")
-    frozen = _freeze_new(state)
+    slowed = []
+    frozen = _freeze_new(state, slowed=slowed)
     lines += [f"- Frozen: {f}" for f in frozen] or ["- No background job was running."]
+    lines += [f"- Efficiency mode (still running, slowly): {s}" for s in slowed]
     lines += [f"- Left running: {n} (it watches the keyboard/mouse; frozen, typing would lag)"
               for n in sorted(set(state.get("input_spared", [])))]
     if _stop_voice():
@@ -317,6 +332,8 @@ def _turn_off() -> str:
     resumed, gone = wake_frozen(state.get("frozen", []))
     if resumed:
         lines.append(f"- {resumed} frozen job process(es) carry on where they stopped.")
+    if eco.restore(state.get("eco", [])):
+        lines.append("- Background apps are out of efficiency mode.")
     if gone:
         lines.append(f"- {gone} frozen process(es) were gone (e.g. after a restart); start those jobs again if needed.")
     if not state.get("queue_was_paused"):
@@ -382,6 +399,24 @@ def _locked(wait: float = 30):
             LOCK.unlink(missing_ok=True)
 
 
+def recover() -> str | None:
+    """A mode switched on before the PC last started (a crash, a restart) is not really on any more: everything it
+    froze is gone. Switch it off properly (queue, power mode, the switch file). Returns what was done, or None."""
+    state = read_json(FLAG, None)
+    if not isinstance(state, dict):
+        return None
+    try:
+        booted = psutil.boot_time()
+    except Exception:  # noqa: BLE001
+        return None
+    if state.get("since", booted) >= booted:
+        return None
+    with _locked(wait=10) as got:
+        if not got or not is_on():
+            return None
+        return "Found on after a restart, switched off.\n" + _turn_off()
+
+
 def enforce() -> list[str]:
     """While gaming mode is on: freeze jobs that started since. Called by the Job Monitor on every refresh
     (it skips a round rather than wait while a switch is happening)."""
@@ -411,6 +446,9 @@ def status() -> str:
 
 def main(argv: list[str]) -> int:
     command = (argv[0] if argv else "status").lower()
+    cleaned = recover()
+    if cleaned:
+        print(cleaned + "\n")
     actions = {"on": turn_on, "off": turn_off, "toggle": toggle, "status": status}
     if command not in actions:
         print("Use: gaming on | off | toggle | status")

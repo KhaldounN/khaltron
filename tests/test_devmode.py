@@ -54,6 +54,7 @@ def dev(state_dir, tmp_path, monkeypatch):
     monkeypatch.setattr(devmode, "window_pids", lambda: set(roles["windows"]))
     # the stand-ins are pythons: count them as main programs (like claude.exe), which are the ones boosted
     monkeypatch.setattr(devmode, "WORK_NAMES", devmode.WORK_NAMES | {"python.exe"})
+    monkeypatch.setattr(devmode, "PRIORITIES", True)  # the priority tests switch that part on
     yield modes, roles
     if devmode.is_on():  # a failed test must not leave anything frozen or changed
         devmode.turn_off()
@@ -235,3 +236,13 @@ def test_enforce_uses_the_monitors_own_sample(dev, procs):
         for pid in [me.pid] + [c.pid for c in me.children(recursive=True)]}
     devmode.enforce(sample)
     assert nice(work.pid) == devmode.BOOST
+
+
+def test_priorities_are_left_alone_by_default(dev, procs, monkeypatch):
+    _, roles = dev
+    monkeypatch.setattr(devmode, "PRIORITIES", False)  # the default: development mode is about memory
+    work, app = procs("work"), procs("app")
+    roles["work"].append(work.pid)
+    roles["windows"].add(app.pid)
+    devmode.turn_on()
+    assert nice(work.pid) == nice(app.pid) == devmode.NORMAL

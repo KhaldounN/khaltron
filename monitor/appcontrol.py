@@ -44,6 +44,7 @@ class Control:
     allowed: list[int] = field(default_factory=list)
     reason: str = ""
     paused: list[int] = field(default_factory=list)
+    mine: bool = False  # on your work list (monitor/mywork.py)
 
 
 _exe_cache: dict[tuple[int, float], str] = {}
@@ -83,6 +84,8 @@ def controls(programs: list, samples: dict, mine: int) -> dict[str, Control]:
     """Program name -> Control, for the Programs tab (called in the background, once per refresh)."""
     live = {(pid, s.started) for pid, s in samples.items()}
     paused = {item["pid"] for item in paused_list() if (item["pid"], item["created"]) in live}
+    from . import mywork
+    work = mywork.names()
     out = {}
     for program in programs:
         control = Control()
@@ -98,6 +101,8 @@ def controls(programs: list, samples: dict, mine: int) -> dict[str, Control]:
                 control.allowed.append(pid)
             if pid in paused:
                 control.paused.append(pid)
+            if work and (sample.name or "").lower() in work:
+                control.mine = True
         if not control.allowed:
             control.reason = reasons[0] if reasons else "no process to act on"
         out[program.name] = control

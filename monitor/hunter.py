@@ -205,6 +205,7 @@ class KhaltronHeader(tk.Canvas):
         self.timer = None
         self.gaze = {"angle": (ANGLES[2], ANGLES[2]), "scale": 1.0, "pupil": PUPIL[2], "from": None, "since": 0.0}
         self.hover = False
+        self.lite = False  # the still header (set_lite)
         self.mode_line, self.banner, self.button_items = [], [], []
         self.started = time.time()
         self.bind("<Configure>", self._resized)
@@ -368,8 +369,18 @@ class KhaltronHeader(tk.Canvas):
             if self.user_engaged:
                 self.on_locked_cb(self.hunt_cards)
 
+    def set_lite(self, on: bool):
+        """The lite look (2026-11-13): a still header (no glow pulse, dust or wandering eyes), switched by hand or by
+        the window when the PC is very busy. Gaming mode's sequence still plays in full."""
+        if on != self.lite:
+            self.lite = on
+            if not on:
+                self._schedule(self._idle_step, TIMING["firstIdle"])
+
     def _idle_step(self):
         if self.phase != "watch":
+            return
+        if self.lite:  # still: no looking around (set_lite starts it again)
             return
         count = max(1, len(self.cards))
         n = self.look if isinstance(self.look, int) else 0
@@ -685,9 +696,13 @@ class KhaltronHeader(tk.Canvas):
     # --- the animation --------------------------------------------------------------------------------------------
     def _tick(self):
         try:
+            busy = (self.hunt and self.phase != "locked") or bool(self.flash) or bool(
+                self.gaze.get("to") and time.time() - self.gaze["since"] < .6)
+            if self.lite and not busy:  # the lite look: a still header, one cheap check a second
+                self.after(1000, self._tick)
+                return
             if self.winfo_viewable() and self.width and self.phase != "locked":
                 self._frame(time.time() - self.started)
-            busy = (self.hunt and self.phase != "locked") or self.flash or self.gaze.get("to") and                 time.time() - self.gaze["since"] < .6
             fast = self.FRAME_MS if busy else self.CALM_MS
             # another window has the focus: calm frames once a second (the gaming sequence keeps its pace)
             delay = 700 if self.phase == "locked" else theme.pace(self, fast, background=fast if busy else 1000)

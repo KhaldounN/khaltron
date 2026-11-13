@@ -39,3 +39,11 @@ def _no_real_input_probe(tmp_path, monkeypatch):
     from monitor import inputguard
     monkeypatch.setattr(inputguard, "FILE", tmp_path / "input_hooks.json")
     monkeypatch.setattr(inputguard, "probe_ms", lambda: 1.0)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_work_list(tmp_path, monkeypatch):
+    """No test reads or writes the real 'my work' list (monitor/mywork.py)."""
+    from monitor import mywork
+    monkeypatch.setattr(mywork, "FILE", tmp_path / "my_work.json")
+    monkeypatch.setitem(mywork._cache, "mtime", None)

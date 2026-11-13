@@ -192,6 +192,25 @@ Settings: `dev_keep` (more program names that count as your work, e.g. `["cursor
 (folders whose programs are your work; default Stable Diffusion / ComfyUI), `dev_boost` (`"high"` or
 `"above_normal"`, the default; "high" let a busy ComfyUI crowd out typing).
 
+## Made practical (2026-11-13)
+
+- **Memory guard:** the planned queue starts a new job only while at least 2 GB of RAM is free (`memory_guard_mb`);
+  the job shows "waiting for memory" meanwhile and starts by itself when there is room.
+- **Efficiency mode for background apps:** gaming and development mode no longer freeze OneDrive, Plex, Widgets,
+  Phone Link or Adobe sync: they get Windows 11's own efficiency mode (`monitor\eco.py`: power throttling, idle
+  priority, memory trimmed) and keep running, slowly, so their connections and files don't time out. Your own jobs
+  (Book Analyzer, planned jobs, heavy scripts) are still frozen.
+- **Development mode is about memory:** it no longer boosts or lowers priorities unless you set
+  `"dev_priorities": true` (memory is this kind of PC's limit, and priorities don't free any).
+- **Your work list:** Programs tab > *Mark as my work* / *Not my work* (`state\my_work.json`). Both modes leave
+  those programs, and what they start, alone.
+- **Fast switches:** `gaming.ps1` / `devmode.ps1` (the hotkeys, the Claude phrases) ask the running Khaltron
+  through its local port (answer in under a second); only without one do they start Python.
+- **After a crash or restart:** a mode found "on" from before the PC started is switched off properly (queue, power
+  mode, switch file), when Khaltron starts or any switch is used.
+- **Lite look:** a still header (tray menu or *Start / control*; `state\lite.json`), and automatically while the
+  CPU stays above 85%.
+
 ## The keyboard and mouse always stay quick
 
 Some programs watch every key press (a "low-level hook"); frozen, they make Windows wait ~300 ms on every key. So the
@@ -253,6 +272,8 @@ Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repositor
 | `monitor\gaming.py`, `gaming.ps1` | gaming mode |
 | `monitor\devmode.py`, `devmode.ps1` | development mode |
 | `monitor\inputguard.py` | never freeze a program that watches the keyboard or mouse |
+| `monitor\eco.py`, `monitor\mywork.py` | efficiency mode for background apps; your work list |
+| `modeswitch.ps1` | the fast mode switch shared by `gaming.ps1` and `devmode.ps1` |
 
 Run the tests with `.venv\Scripts\python.exe -m pytest`.
 

@@ -15,9 +15,10 @@ LABELS = {
     "stop": "Stop", "pause2": "Pause stage 2", "resume2": "Resume stage 2", "log": "Open log", "folder": "Open folder",
     "up": "Move up", "down": "Move down", "remove": "Remove", "runnow": "Run next", "runtask": "Run task now",
     "pause_app": "Pause", "resume_app": "Resume", "close_app": "Close", "end_app": "End now",
+    "keep_app": "Mark as my work", "unkeep_app": "Not my work",
     "startup_off": "Don't start at login", "startup_on": "Start at login",
 }
-HARMLESS = {"log", "folder"}
+HARMLESS = {"log", "folder", "keep_app", "unkeep_app"}  # no "are you sure?": nothing happens to the program now
 
 
 def question(job: Job, action: str) -> str:
@@ -81,6 +82,9 @@ def do(job: Job, action: str) -> str:
         return "Folder opened."
     if action in ("startup_off", "startup_on"):
         return startup.set_on(job.ref["app"], action == "startup_on")
+    if action in ("keep_app", "unkeep_app"):
+        from . import mywork
+        return mywork.mark(job.name, job.ref.get("allowed", []) or job.ref.get("pids", []), action == "keep_app")
     if action.endswith("_app"):
         pids = job.ref.get("allowed", [])
         return {"pause_app": lambda: appcontrol.pause(job.name, pids), "resume_app": lambda: appcontrol.resume(job.name),
