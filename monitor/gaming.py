@@ -108,9 +108,9 @@ def website(cmdline: str) -> bool:
             and "book analyzer" in cmdline.lower())
 
 
-def _job_processes() -> list[psutil.Process]:
+def _job_processes(website_too: bool = True) -> list[psutil.Process]:
     """Every process gaming mode freezes: known job scripts, whatever planned jobs are running (and their
-    children), and the safe extras (_extras)."""
+    children), and the safe extras (_extras). Development mode passes website_too=False (the site keeps running)."""
     found: dict[int, psutil.Process] = {}
     for process in psutil.process_iter(["name"]):
         name = (process.info.get("name") or "").lower()
@@ -121,7 +121,8 @@ def _job_processes() -> list[psutil.Process]:
             continue
         cmdline = _cmdline(process)
         if website(cmdline):
-            found[process.pid] = process
+            if website_too:
+                found[process.pid] = process
             continue
         if any(n in cmdline for n in NEVER):
             continue
@@ -150,11 +151,14 @@ def _trim(pid: int) -> None:
             kernel.CloseHandle(handle)
 
 
-def _freeze_new(state: dict) -> list[str]:
-    """Suspend job processes not frozen yet; record them in `state`. Returns their descriptions."""
+def _freeze_new(state: dict, website_too: bool = True, skip=None) -> list[str]:
+    """Suspend job processes not frozen yet; record them in `state`. Returns their descriptions.
+    skip(process) -> True leaves one alone (development mode: whatever Claude or Stable Diffusion runs)."""
     known = {(p["pid"], p["created"]) for p in state["frozen"]}
     out = []
-    for process in _job_processes():
+    for process in _job_processes(website_too):
+        if skip and skip(process):
+            continue
         try:
             created = process.create_time()
             if (process.pid, created) in known:
@@ -226,6 +230,10 @@ def free_memory_gb() -> float:
 def _turn_on(auto: dict | None = None) -> str:
     if is_on():
         return "Gaming mode is already ON.\n" + status()
+    from . import devmode  # here, not at the top: devmode imports this module
+    dev_was_on = devmode.is_on()
+    if dev_was_on:  # never both: development mode goes first, so the queue and power mode are back as you left them
+        devmode._turn_off()
     before = free_memory_gb()
     state = {"since": time.time(), "frozen": [], "queue_was_paused": planned.queue_paused(), "power_before": None}
     if auto:  # switched on by auto mode for this game (autogame.py): it switches off again when the game closes
@@ -233,6 +241,8 @@ def _turn_on(auto: dict | None = None) -> str:
     # the flag goes first, so the voice can't start again and the monitor freezes any job that starts meanwhile
     write_json(FLAG, state)
     lines = ["Gaming mode ON."]
+    if dev_was_on:
+        lines.append("- Development mode switched off first.")
     if not state["queue_was_paused"]:
         planned.pause_queue(True)
         lines.append("- Planned queue paused (no new job starts).")
@@ -252,13 +262,10 @@ def _turn_on(auto: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def _turn_off() -> str:
-    if not is_on():
-        return "Gaming mode is already OFF."
-    state = read_json(FLAG, {}) or {}
-    lines = ["Gaming mode OFF."]
+def wake_frozen(items: list[dict]) -> tuple[int, int]:
+    """Resume the frozen processes recorded in `items` (gaming or development mode). Returns (resumed, gone)."""
     alive, gone = [], 0
-    for item in state.get("frozen", []):
+    for item in items:
         try:
             process = psutil.Process(item["pid"])
             if abs(process.create_time() - item["created"]) > 1:  # the number now belongs to another program
@@ -275,6 +282,15 @@ def _turn_off() -> str:
     if workers and len(workers) < len(alive):
         time.sleep(3)
     resumed += _resume([p for p in alive if p not in workers])
+    return resumed, gone
+
+
+def _turn_off() -> str:
+    if not is_on():
+        return "Gaming mode is already OFF."
+    state = read_json(FLAG, {}) or {}
+    lines = ["Gaming mode OFF."]
+    resumed, gone = wake_frozen(state.get("frozen", []))
     if resumed:
         lines.append(f"- {resumed} frozen job process(es) carry on where they stopped.")
     if gone:

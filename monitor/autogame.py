@@ -17,7 +17,7 @@ from ctypes import wintypes
 
 import psutil
 
-from . import gaming
+from . import devmode, gaming
 from .config import CONFIG, STATE
 from .util import read_json, write_json
 
@@ -127,8 +127,9 @@ class Watcher:
     to show, as (title, message)."""
 
     def __init__(self, turn_on=gaming.turn_on, turn_off=gaming.turn_off, is_on=gaming.is_on, flag=lambda: gaming.FLAG,
-                 front=fullscreen_pid):
+                 front=fullscreen_pid, dev_on=devmode.is_on):
         self.turn_on, self.turn_off, self.is_on, self.flag, self.front = turn_on, turn_off, is_on, flag, front
+        self.dev_on = dev_on
         self.handled: set[tuple[int, float]] = set()  # games auto mode already switched for (never twice)
         self.front_since: dict[tuple[int, float], float] = {}
 
@@ -171,8 +172,10 @@ class Watcher:
                 message = self.turn_off()
                 return [(f"{auto.get('game', 'Game')} closed: gaming mode OFF", _last_line(message))]
             return []
-        if not enabled() or self.is_on():
-            self.handled |= set(games)  # on by hand (or auto mode off): this game is yours to manage
+        if not enabled() or self.is_on() or self.dev_on():
+            # on by hand, auto mode off, or development mode on (you are working: a full-screen app is not a game
+            # then): this game is yours to manage
+            self.handled |= set(games)
             return []
         new = {key: name for key, name in games.items() if key not in self.handled}
         if not new:

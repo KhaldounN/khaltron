@@ -4,7 +4,8 @@
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -NoShortcuts  (no desktop shortcuts)
 # It makes:
 #  1. its own Python environment (.venv) with the packages in requirements.txt
-#  2. desktop shortcuts: "Khaltron 9000" (Ctrl+Alt+J) and "Khaltron Gaming Mode" (Ctrl+Alt+G, switches gaming mode)
+#  2. desktop shortcuts: "Khaltron 9000" (Ctrl+Alt+J), "Khaltron Gaming Mode" (Ctrl+Alt+G, switches gaming mode)
+#     and "Khaltron Dev Mode" (Ctrl+Alt+D, switches development mode)
 #  3. a scheduled task "Khaltron 9000" that starts it hidden in the tray when you log in (current user only)
 # Undo: delete the shortcuts, and  Unregister-ScheduledTask -TaskName "Khaltron 9000" -Confirm:$false
 param([switch]$NoShortcuts, [switch]$NoStartup)
@@ -69,6 +70,19 @@ if (-not $NoShortcuts) {
         $link.Description = "Gaming mode on/off: freezes background jobs so a game gets the PC"
         $link.Save()
         "Desktop shortcut 'Khaltron Gaming Mode' made (Ctrl+Alt+G)."
+    }
+    # development mode on/off (skipped if a "Dev Mode" shortcut already has that hotkey)
+    if (-not (Test-Path (Join-Path $desktop "Dev Mode.lnk"))) {
+        $link = $shell.CreateShortcut((Join-Path $desktop "Khaltron Dev Mode.lnk"))
+        $link.TargetPath = "powershell.exe"
+        $link.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$(Join-Path $here 'devmode.ps1')`" toggle"
+        $link.WorkingDirectory = $here
+        $link.Hotkey = "CTRL+ALT+D"
+        $link.WindowStyle = 7
+        $link.IconLocation = "$icon,0"
+        $link.Description = "Development mode on/off: your work (Claude, terminal, Stable Diffusion) gets the PC first"
+        $link.Save()
+        "Desktop shortcut 'Khaltron Dev Mode' made (Ctrl+Alt+D)."
     }
 }
 

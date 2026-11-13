@@ -46,7 +46,14 @@ DEFAULTS = {
     # the activation sound when gaming mode turns on (assets/khaltron-gaming-mode.wav) and its volume (0-1)
     "gaming_sound": True,
     "gaming_sound_volume": 0.8,
-    "port": 59126,                  # a second launch tells the first window to show itself through this port
+    # development mode (monitor/devmode.py): its switch file, extra programs counted as your work (with everything
+    # they start; Claude, Windows Terminal, VS Code and git always are), folders whose programs are your work too
+    # (Stable Diffusion), and the priority your work gets ("high" or "above_normal")
+    "dev_flag": str(STATE / "dev-mode.json"),
+    "dev_keep": [],
+    "dev_keep_folders": ["stablediffusion", "comfyui", "stable-diffusion-webui"],
+    "dev_boost": "high",
+    "port": 59126,                 # a second launch tells the first window to show itself through this port
 }
 
 

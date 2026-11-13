@@ -8,7 +8,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import actions, alerts, autogame, gaming, planned, runner, startup, theme
+from . import actions, alerts, autogame, devmode, gaming, planned, runner, startup, theme
 from .hud import Briefing, NextList, RunningPanel, Section, StatCard, ViewSwitch
 from .about import AboutPage
 from .hunter import KhaltronHeader, card_for
@@ -179,6 +179,8 @@ class App:
         self.hidden_once = False
         self.gaming_was = None  # gaming mode at the last refresh (a change pops up a notification)
         self.switched_at = 0.0  # when Khaltron itself last switched gaming mode (it says so in its own pop-up)
+        self.dev_was = None     # development mode at the last refresh
+        self.dev_busy = False   # development mode is switching in the background
         self.autogame = autogame.Watcher()
         root.title(theme.NAME)
         # tall enough for the header; never taller than the screen (a laptop's is ~1080 px with the taskbar)
@@ -224,6 +226,7 @@ class App:
             "Resume the planned queue?", lambda: actions.set_queue_paused(False)))
         menu.add_separator()
         menu.add_command(label="Gaming mode on / off (Ctrl+Alt+G)", command=self.toggle_gaming)
+        menu.add_command(label="Development mode on / off (Ctrl+Alt+D)", command=self.toggle_dev)
         menu.add_separator()
         if HAS_BOOK:
             menu.add_command(label="Open the Book Analyzer results folder",
@@ -232,6 +235,9 @@ class App:
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
+        # development mode: your work (Claude, terminal, editor, Stable Diffusion) first, the rest frozen or lowered
+        self.dev_button = ttk.Button(top, text="DEV MODE", style="Dev.TButton", command=self.toggle_dev)
+        self.dev_button.pack(side="right", padx=(6, 0))
         # auto gaming mode: gaming mode switches itself on when a game starts, off when it closes
         self.auto_var = tk.BooleanVar(value=autogame.enabled())
         ttk.Checkbutton(top, text="Auto gaming mode", variable=self.auto_var,
@@ -347,6 +353,11 @@ class App:
             except Exception as error:  # noqa: BLE001
                 self.results.put(("message", f"Gaming mode check failed: {error}"))
             try:
+                for frozen in devmode.enforce():  # development mode: new jobs frozen, new work boosted
+                    self.results.put(("notify", ("Development mode: job frozen", frozen)))
+            except Exception as error:  # noqa: BLE001
+                self.results.put(("message", f"Development mode check failed: {error}"))
+            try:
                 state = collect(slow)
             except Exception as error:  # noqa: BLE001
                 self.results.put(("message", f"Reading failed: {error}"))
@@ -378,6 +389,11 @@ class App:
                     self.gaming_switch.set_state(gaming.is_on(), busy=False)
                 elif kind == "gaming":
                     self.toggle_gaming()
+                elif kind == "dev_done":
+                    self.dev_busy = False
+                    self.show_dev(devmode.is_on())
+                elif kind == "devmode":
+                    self.toggle_dev()
                 elif kind == "auto_gaming":
                     self.set_auto_gaming(not autogame.enabled())
                 elif kind == "show":
@@ -422,6 +438,17 @@ class App:
             self.tray.notify("Gaming mode " + ("ON" if playing else "OFF"),
                              "Background jobs frozen, voice off. Have fun!" if playing else "Background jobs carry on.")
         self.gaming_was = playing
+        developing = devmode.is_on()
+        if not self.dev_busy:
+            self.show_dev(developing)
+        if developing:
+            flags.append("DEVELOPMENT MODE is on: background jobs frozen, Claude / terminal / Stable Diffusion "
+                         "boosted, other apps lowered (the DEV MODE button switches it off).")
+        if developing != self.dev_was and self.dev_was is not None and self.tray and                 time.time() - self.switched_at > 20:  # switched elsewhere (hotkey, Claude)
+            self.tray.notify("Development mode " + ("ON" if developing else "OFF"),
+                             "Your work comes first; background jobs frozen." if developing
+                             else "Everything is back as it was.")
+        self.dev_was = developing
         if state.stage2_paused and any(j.source == "Stage 2" for j in state.waiting):
             flags.append("Stage 2 is paused (Start / control > Resume stage 2).")
         if state.queue_paused:
@@ -552,6 +579,35 @@ class App:
                 body = "Nothing to pause: no background jobs are running. Your apps and Windows are left alone."
             else:
                 body = (f"{len(frozen)} job(s) frozen. " if frozen else "") + lines[-1]
+            self.results.put(("notify", (lines[0], body)))
+            return lines[0] + "  " + lines[-1]
+        self.run_in_background(do)
+
+    def show_dev(self, on: bool):
+        self.dev_button.configure(text="DEV MODE: ON" if on else "DEV MODE", style="DevOn.TButton" if on
+                                  else "Dev.TButton")
+
+    def toggle_dev(self):
+        """Like gaming mode: no "are you sure?" (switching it back undoes everything); a pop-up says what it did."""
+        if self.dev_busy:
+            return
+        self.dev_busy = True
+        self.switched_at = time.time()
+        self.dev_button.configure(text="SWITCHING...")
+        gaming_before = gaming.is_on()
+
+        def do():
+            try:
+                message = devmode.toggle()
+            finally:
+                self.results.put(("dev_done", None))
+                if gaming_before:
+                    self.results.put(("gaming_done", None))
+                self.wake.set()
+            lines = message.splitlines()
+            frozen = sum(1 for line in lines if line.startswith("- Frozen:"))
+            boosted = next((line[2:] for line in lines if line.startswith("- Boosted")), "")
+            body = (f"{frozen} job(s) frozen. " if frozen else "") + (boosted + " " if boosted else "") + lines[-1]
             self.results.put(("notify", (lines[0], body)))
             return lines[0] + "  " + lines[-1]
         self.run_in_background(do)

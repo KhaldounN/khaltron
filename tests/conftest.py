@@ -21,3 +21,12 @@ def state_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "LOCK", tmp_path / "runner.lock")
     monkeypatch.setattr(alerts, "HISTORY", tmp_path / "history.json")
     return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _no_real_mode_files(tmp_path, monkeypatch):
+    """No test may read or change the real gaming / development mode switch files (auto gaming mode checks
+    development mode, gaming mode switches development mode off)."""
+    from monitor import devmode, gaming
+    monkeypatch.setattr(devmode, "FLAG", tmp_path / "dev-mode.json")
+    monkeypatch.setattr(gaming, "FLAG", tmp_path / "gaming.json")

@@ -34,6 +34,10 @@ then lets everything carry on where it left off when you're done.
 - **Auto gaming mode**: switches itself on when a game starts and off when it closes (with its own on/off switch).
 - A little show in the top bar: the raccoon's eyes turn red and it locks onto each app it pauses.
 
+**Development mode**
+- **One click** on DEV MODE (or Ctrl+Alt+D) puts your work first: Claude and everything it runs, your terminal,
+  VS Code and Stable Diffusion get high priority; background jobs are frozen; other apps keep running, lowered.
+
 **Stays out of your way**
 - Lives in the tray by the clock and can start with Windows.
 - Windows notifications when a job starts, finishes or fails, or memory runs low.
@@ -162,6 +166,25 @@ written to `state\gaming.json` (the file existing *is* the switch; other tools c
 carry on where they were. While it is on, a job that starts anyway is frozen too. Protected processes are never
 frozen. Every switch is logged in `state\gaming.log`.
 
+## Development mode
+
+`devmode.ps1 on | off | toggle | status`, or Ctrl+Alt+D, the **DEV MODE** button, the tray menu, or *Start / control*.
+**On** pauses the planned queue and freezes the same background jobs and apps as gaming mode, but never the Book
+Analyzer website or the read-aloud voice. It gives **high** priority to your work: every `claude.exe` and everything it
+started (node, python, shells, dev servers, its test browsers), Windows Terminal, VS Code, git, and anything run from a
+Stable Diffusion folder (ComfyUI) with what it starts. Every other program **with a window** (browsers, chat...) is
+lowered to *below normal*: it keeps working but always gives way; nothing with a window is frozen, so nothing looks
+crashed. Windows' power mode goes to Best performance. A planned job is background work even when Claude queued it.
+While it is on, every refresh freezes new jobs, boosts what your work started since and lowers newly opened programs.
+**Off** resumes the frozen jobs and sets back every priority it changed (unless you changed one yourself meanwhile).
+The switch file is `state\dev-mode.json` (setting `dev_flag`); every switch is logged in `state\devmode.log`.
+Gaming mode and development mode never run together: switching one on switches the other off first, and auto gaming
+mode waits while development mode is on.
+
+Settings: `dev_keep` (more program names that count as your work, e.g. `["cursor.exe"]`), `dev_keep_folders`
+(folders whose programs are your work; default Stable Diffusion / ComfyUI), `dev_boost` (`"high"` or
+`"above_normal"`).
+
 ## Make it watch your own jobs
 
 Out of the box Khaltron shows every program on your PC, your Python processes, the planned queue (`jobq`), scheduled
@@ -202,7 +225,7 @@ Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repositor
 | `monitor.pyw` | starts the window and the tray icon; a second launch just shows the first window |
 | `monitor\ui.py` | the window (tkinter): tables, buttons, confirmations |
 | `monitor\hunter.py` | the header, built to `design/khaltron-header/` (its README is the spec): the raccoon, its eyes and beams, the cards, the gaming-mode sequence |
-| `monitorbout.py` | the About tab: who made it and why |
+| `monitor\about.py` | the About tab: who made it and why |
 | `monitor\hud.py` | the stat cards with live graphs, the job cards, the overview parts |
 | `monitor\theme.py` | every colour and font, the logo, the dark title bar |
 | `monitor\collect.py` | one refresh: asks every reader and adds up what the jobs use |
@@ -211,6 +234,7 @@ Put a `config.json` next to `monitor.pyw` (it's yours: it isn't in the repositor
 | `monitor\actions.py`, `monitor\protect.py` | what the buttons do, and the never-stop list |
 | `monitor\alerts.py`, `monitor\tray.py` | notifications, history, the tray icon |
 | `monitor\gaming.py`, `gaming.ps1` | gaming mode |
+| `monitor\devmode.py`, `devmode.ps1` | development mode |
 
 Run the tests with `.venv\Scripts\python.exe -m pytest`.
 
