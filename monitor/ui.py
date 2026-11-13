@@ -235,9 +235,6 @@ class App:
         start["menu"] = menu
         start.pack(side="right")
         ttk.Button(top, text="Hide to tray", command=self.hide).pack(side="right", padx=6)
-        # development mode: your work (Claude, terminal, editor, Stable Diffusion) first, the rest frozen or lowered
-        self.dev_button = ttk.Button(top, text="DEV MODE", style="Dev.TButton", command=self.toggle_dev)
-        self.dev_button.pack(side="right", padx=(6, 0))
         # auto gaming mode: gaming mode switches itself on when a game starts, off when it closes
         self.auto_var = tk.BooleanVar(value=autogame.enabled())
         ttk.Checkbutton(top, text="Auto gaming mode", variable=self.auto_var,
@@ -336,7 +333,7 @@ class App:
         on its ledge, cyan while monitoring, red when gaming mode hunts (monitor/hunter.py)."""
         self.programs = []  # the latest Programs-on-this-PC rows (for the cards gaming mode will pause)
         self.header = KhaltronHeader(self.root, on_locked=self.freeze_for_game, on_exit=self.leave_game,
-                                     targets=self.gaming_targets)
+                                     targets=self.gaming_targets, on_dev=self.toggle_dev)
         self.header.pack(fill="x")
         tk.Frame(self.root, height=1, bg=theme.LINE).pack(fill="x")
 
@@ -443,7 +440,7 @@ class App:
             self.show_dev(developing)
         if developing:
             flags.append("DEVELOPMENT MODE is on: background jobs frozen, Claude / terminal / Stable Diffusion "
-                         "boosted, other apps lowered (the DEV MODE button switches it off).")
+                         "boosted, other apps lowered (the header's DEV MODE button switches it off).")
         if developing != self.dev_was and self.dev_was is not None and self.tray and                 time.time() - self.switched_at > 20:  # switched elsewhere (hotkey, Claude)
             self.tray.notify("Development mode " + ("ON" if developing else "OFF"),
                              "Your work comes first; background jobs frozen." if developing
@@ -584,8 +581,8 @@ class App:
         self.run_in_background(do)
 
     def show_dev(self, on: bool):
-        self.dev_button.configure(text="DEV MODE: ON" if on else "DEV MODE", style="DevOn.TButton" if on
-                                  else "Dev.TButton")
+        """The header's DEV MODE pill (left of GAMING MODE) shows development mode's state."""
+        self.header.set_dev(on, busy=False)
 
     def toggle_dev(self):
         """Like gaming mode: no "are you sure?" (switching it back undoes everything); a pop-up says what it did."""
@@ -593,7 +590,7 @@ class App:
             return
         self.dev_busy = True
         self.switched_at = time.time()
-        self.dev_button.configure(text="SWITCHING...")
+        self.header.set_dev(devmode.is_on(), busy=True)
         gaming_before = gaming.is_on()
 
         def do():

@@ -35,8 +35,9 @@ then lets everything carry on where it left off when you're done.
 - A little show in the top bar: the raccoon's eyes turn red and it locks onto each app it pauses.
 
 **Development mode**
-- **One click** on DEV MODE (or Ctrl+Alt+D) puts your work first: Claude and everything it runs, your terminal,
-  VS Code and Stable Diffusion get high priority; background jobs are frozen; other apps keep running, lowered.
+- **One click** on the header's DEV MODE button (or Ctrl+Alt+D) puts your work first: Claude and everything it
+  runs, your terminal, VS Code and Stable Diffusion get high priority; background jobs are frozen; other apps keep
+  running, lowered. The raccoon turns yellow and a short power-up sound plays.
 
 **Stays out of your way**
 - Lives in the tray by the clock and can start with Windows.
@@ -168,7 +169,10 @@ frozen. Every switch is logged in `state\gaming.log`.
 
 ## Development mode
 
-`devmode.ps1 on | off | toggle | status`, or Ctrl+Alt+D, the **DEV MODE** button, the tray menu, or *Start / control*.
+`devmode.ps1 on | off | toggle | status`, or Ctrl+Alt+D, the header's **DEV MODE** button (left of GAMING MODE), the
+tray menu, or *Start / control*. While it is on the header turns yellow (raccoon, eyes, beams, cards) and reads
+*DEV MODE // YOUR WORK FIRST*; switching on plays `assets\khaltron-dev-mode.wav` (made by
+`tools\make_dev_sound.py`, settings `dev_sound` and `dev_sound_volume`).
 **On** pauses the planned queue and freezes the same background jobs and apps as gaming mode, but never the Book
 Analyzer website or the read-aloud voice. It gives **high** priority to your work: every `claude.exe` and everything it
 started (node, python, shells, dev servers, its test browsers), Windows Terminal, VS Code, git, and anything run from a

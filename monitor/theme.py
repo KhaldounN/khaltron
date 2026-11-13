@@ -83,10 +83,6 @@ def apply(root: tk.Tk) -> ttk.Style:
     style.map("TButton", background=[("disabled", BG), ("pressed", LASER_DARK), ("active", "#22252e")],
               foreground=[("disabled", DIM), ("active", LASER)], bordercolor=[("active", LASER), ("disabled", LINE)])
     style.configure("Card.TButton", padding=(8, 2), font=(FONT, 8))
-    # the development mode switch: bold; filled cyan while it is on
-    style.configure("Dev.TButton", font=(FONT, 9, "bold"))
-    style.configure("DevOn.TButton", background=LASER, foreground=BG, bordercolor=LASER, font=(FONT, 9, "bold"))
-    style.map("DevOn.TButton", background=[("active", GREEN)], foreground=[("active", BG)])
     style.configure("TMenubutton", background=LASER_DARK, foreground="#fff1f2", bordercolor=LASER, arrowcolor="#fff1f2",
                     padding=(10, 4), relief="flat", font=(FONT, 9, "bold"))
     style.map("TMenubutton", background=[("active", "#a3121f")])

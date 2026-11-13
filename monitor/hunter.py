@@ -36,13 +36,14 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageTk
 
-from . import theme
+from . import sound, theme
 from .config import HOME
 
 NATIVE_W, NATIVE_H = 1920, 180   # the design's thin top bar (10.7:1): ~110 px tall in a 1180 px window
 VIEW_W = NATIVE_W
 OFFSET = 0
 CYAN, RED = "#35E0FF", "#FF3B3B"
+YELLOW = "#FFC83D"        # development mode (the owner's choice, 2026-11-13): the raccoon, its eyes and beams go yellow
 EYES = [(933.3, 82.2), (985.6, 82.7)]   # measured on the banner art (its glowing eyes at 1044,348 / 1138,349)
 CAM = (959, 82)           # the push-in's origin
 ART_BOX = (357, 0, 1199, 180)  # the artwork's left, top, width, height: the whole banner, its ledge on the bar's edge
@@ -89,16 +90,23 @@ def card_for(program) -> Card:
 
 
 # --- the still picture -------------------------------------------------------------------------------------------
-_native: dict[bool, Image.Image] = {}
+_native: dict[str, Image.Image] = {}  # by look: "watch", "hunt", "dev"
 _scaled: dict[tuple, Image.Image] = {}
 _lock = threading.Lock()
 
 
-def _native_scene(hunt: bool) -> Image.Image:
-    """The still picture at the design's 1600 x 320, for monitor or gaming mode (cached)."""
+def _look(look) -> str:
+    """The picture's look: "watch" (monitor mode), "hunt" (gaming mode) or "dev" (development mode)."""
+    return "hunt" if look is True else "watch" if look is False else look
+
+
+def _native_scene(look) -> Image.Image:
+    """The still picture at the design's 1600 x 320, for monitor, gaming or development mode (cached)."""
+    look = _look(look)
+    hunt = look == "hunt"
     with _lock:
-        if hunt in _native:
-            return _native[hunt]
+        if look in _native:
+            return _native[look]
         # the dark background: radial-gradient(ellipse at 50% 40%, #15181D 0%, #07080A 60%)
         radial = Image.radial_gradient("L").resize((int(VIEW_W * 1.2), int(NATIVE_H * 2.4)))
         left, top = int(VIEW_W * .5 - radial.width / 2), int(NATIVE_H * .4 - radial.height / 2)
@@ -130,19 +138,29 @@ def _native_scene(hunt: bool) -> Image.Image:
             ImageDraw.Draw(edge).rectangle((0, 0, VIEW_W - 1, NATIVE_H - 1), outline=255, width=34)
             edge = edge.filter(ImageFilter.GaussianBlur(30)).point(lambda v: int(v * .45))  # inset 70px
             img = Image.composite(Image.new("RGB", img.size, (255, 30, 30)), img, edge)
+        elif look == "dev":
+            # the yellow grade: like gaming mode's red one, but warmer, lighter and without the push-in
+            grey = img.convert("L")
+            amber = Image.merge("RGB", (grey.point(lambda v: min(255, int(v * 1.5))),
+                                        grey.point(lambda v: min(255, int(v * 1.12))), grey.point(lambda v: int(v * .25))))
+            img = Image.blend(img, amber, .42)
+            edge = Image.new("L", img.size, 0)
+            ImageDraw.Draw(edge).rectangle((0, 0, VIEW_W - 1, NATIVE_H - 1), outline=255, width=34)
+            edge = edge.filter(ImageFilter.GaussianBlur(30)).point(lambda v: int(v * .3))
+            img = Image.composite(Image.new("RGB", img.size, (255, 190, 40)), img, edge)
         # film grain (.12, overlay)
         noise = Image.effect_noise(img.size, 45).convert("RGB")
         img = Image.blend(img, ImageChops.overlay(img, noise), .12)
-        _native[hunt] = img
+        _native[look] = img
         return img
 
 
-def scene(width: int, hunt: bool) -> Image.Image:
-    key = (width, hunt)
+def scene(width: int, look) -> Image.Image:
+    key = (width, _look(look))
     if key not in _scaled:
         height = round(width * NATIVE_H / VIEW_W)
-        _scaled[key] = _native_scene(hunt).resize((width, height), Image.LANCZOS)
-        if len(_scaled) > 6:
+        _scaled[key] = _native_scene(look).resize((width, height), Image.LANCZOS)
+        if len(_scaled) > 9:
             _scaled.pop(next(iter(_scaled)))
     return _scaled[key]
 
@@ -163,13 +181,17 @@ class KhaltronHeader(tk.Canvas):
     """The window gives it: set_programs() (the monitor-mode cards), set_state() (gaming mode as the app sees it,
     maybe switched elsewhere: hotkey, tray, Claude), mark_frozen() (which cards really got paused). It calls back:
     on_locked(cards) when the gaming sequence locks (time to freeze the jobs), on_exit() when the user leaves gaming
-    mode, and targets() for the cards gaming mode will pause."""
+    mode, and targets() for the cards gaming mode will pause. Development mode has its own pill left of the gaming
+    one: on_dev() when clicked, set_dev() for its state (hidden while gaming mode runs: never both)."""
 
     FRAME_MS = 90
 
-    def __init__(self, parent, on_locked, on_exit, targets):
+    def __init__(self, parent, on_locked, on_exit, targets, on_dev=None):
         super().__init__(parent, height=200, bg=theme.BG, highlightthickness=0)
         self.on_locked_cb, self.on_exit_cb, self.targets_cb = on_locked, on_exit, targets
+        self.on_dev_cb = on_dev
+        self.dev_on, self.dev_busy, self.dev_hover, self.dev_items = False, False, False, []
+        self.button_x0 = 0.0  # the gaming pill's left edge (the dev pill sits left of it)
         self.width = 0
         self.hunt, self.phase, self.look, self.warned = False, "watch", 2, -1
         self.user_engaged = False          # the user clicked: the real freeze waits for "locked"
@@ -208,15 +230,20 @@ class KhaltronHeader(tk.Canvas):
 
     @property
     def accent(self) -> str:
-        return RED if self.hunt else CYAN
+        return RED if self.hunt else YELLOW if self.dev_on else CYAN
+
+    @property
+    def scene_look(self) -> str:
+        return "hunt" if self.hunt else "dev" if self.dev_on else "watch"
 
     def _resized(self, event):
         if event.width != self.width and event.width > 50:
             self.width = event.width
             self.configure(height=round(event.width * NATIVE_H / VIEW_W))
             self.build()
-            other = (event.width, not self.hunt)
-            threading.Thread(target=lambda: scene(*other), daemon=True).start()  # the other mode, ready to switch
+            others = [look for look in ("watch", "hunt", "dev") if look != self.scene_look]
+            threading.Thread(target=lambda w=event.width: [scene(w, look) for look in others],
+                             daemon=True).start()  # the other modes, ready to switch
 
     # --- building ------------------------------------------------------------------------------------------------
     def build(self):
@@ -224,7 +251,7 @@ class KhaltronHeader(tk.Canvas):
             return
         self.delete("all")
         S, a = self.S, self.accent
-        self.photo = ImageTk.PhotoImage(scene(self.width, self.hunt))
+        self.photo = ImageTk.PhotoImage(scene(self.width, self.scene_look))
         self.scene_item = self.create_image(0, 0, image=self.photo, anchor="nw")
         self.shaken = (0.0, 0.0)
         # eye overlays (in the camera layer: they move with the push-in and the shake)
@@ -449,7 +476,7 @@ class KhaltronHeader(tk.Canvas):
         for item in self.mode_line + self.banner:
             self.delete(item)
         if not self.hunt:
-            line, banner = "MONITOR MODE // WATCHING", ""
+            line, banner = ("DEV MODE // YOUR WORK FIRST" if self.dev_on else "MONITOR MODE // WATCHING"), ""
         elif self.phase == "sweep":
             line, banner = "GAMING MODE // ISSUING WARNINGS", "⚠ GAMING MODE ENGAGED — ISSUING WARNINGS"
         else:
@@ -494,6 +521,73 @@ class KhaltronHeader(tk.Canvas):
             self.tag_bind(item, "<Enter>", lambda e: self._hover(True))
             self.tag_bind(item, "<Leave>", lambda e: self._hover(False))
         self.button_items = items
+        self.button_x0 = x0
+        self._paint_dev_button()
+
+    # --- the development mode pill ----------------------------------------------------------------------------------
+    def set_dev(self, on: bool, busy: bool | None = None):
+        """Development mode as the app sees it (it may have been switched by the hotkey, the tray or Claude)."""
+        switched = on != self.dev_on
+        busy_changed = busy is not None and busy != self.dev_busy
+        if switched and on:
+            self._dev_sound()  # switched elsewhere (hotkey, tray, Claude): the sound plays now
+        self.dev_on = on
+        if busy is not None:
+            self.dev_busy = busy
+        if switched:
+            self.build()  # a new look: the yellow (or the usual cyan) picture, eyes, beams, cards and text
+        elif busy_changed:
+            self._paint_dev_button()
+
+    def _dev_sound(self):
+        if time.time() - getattr(self, "dev_sound_at", 0) > 10:  # once per switch, not again when it lands
+            self.dev_sound_at = time.time()
+            sound.play_dev()
+
+    def _dev_click(self, _event=None):
+        if not self.dev_busy and not self.hunt and self.on_dev_cb:
+            if not self.dev_on:
+                self._dev_sound()  # at the click: the switch itself takes a few seconds
+            self.on_dev_cb()
+
+    def _dev_hover(self, inside: bool):
+        if inside != self.dev_hover:
+            self.dev_hover = inside
+            self.configure(cursor="hand2" if inside else "")
+            self._paint_dev_button()
+
+    def _paint_dev_button(self):
+        if not self.width:
+            return
+        for item in self.dev_items:
+            self.delete(item)
+        self.dev_items = []
+        if self.hunt or not self.on_dev_cb:  # gaming mode's show: one mode at a time
+            return
+        S = self.S
+        text = "SWITCHING…" if self.dev_busy else ("DEV MODE: ON" if self.dev_on else "DEV MODE")
+        icon = "</>"
+        icon_w = self.button_font.measure(icon)
+        tw = self.button_font.measure(text) + len(text) * self.button_font.metrics("ascent") * .12
+        pad, gap = 22 * S, 10 * S
+        w, h = tw + icon_w + gap + 2 * pad, 44 * S
+        x1, y0 = self.button_x0 - 12 * S, 16 * S
+        x0 = x1 - w
+        if self.dev_on:  # on: filled yellow, dark letters
+            fill = theme.mix(YELLOW, "#FFFFFF", .25) if self.dev_hover else YELLOW
+            edge, colour = YELLOW, "#1A1204"
+        else:
+            fill = theme.mix("#060C12", CYAN, .16) if self.dev_hover else "#081018"
+            edge, colour = CYAN, "#CFF7FF"
+        items = [self.create_polygon(*_round_rect(x0, y0, x1, y0 + h, h / 2), smooth=True, fill=fill, outline=edge)]
+        ix, iy = x0 + pad, y0 + h / 2
+        items.append(self.create_text(ix, iy, text=icon, font=self.button_font, fill=colour, anchor="w"))
+        items += self._spaced(ix + icon_w + gap, iy, text, self.button_font, colour, .12)
+        for item in items:
+            self.tag_bind(item, "<Button-1>", self._dev_click)
+            self.tag_bind(item, "<Enter>", lambda e: self._dev_hover(True))
+            self.tag_bind(item, "<Leave>", lambda e: self._dev_hover(False))
+        self.dev_items = items
 
     def _hover(self, inside: bool):
         if inside != self.hover:
@@ -540,18 +634,20 @@ class KhaltronHeader(tk.Canvas):
             self.itemconfigure(items["tag"], text=card.tag)
             status = self._status_of(i)
             text, colour = STATUS[status]
+            if status == "monitored" and self.dev_on:
+                colour = theme.mix(YELLOW, "#FFFFFF", .35)
             self.itemconfigure(items["status"], text=text, fill=colour)
             x0, y0, w = items["x0"], items["y0"] + items["dy"], items["w"]
             self.coords(items["fill"], x0 + 10 * S, y0 + 24 * S, x0 + 10 * S + (w - 20 * S) * card.load, y0 + 28 * S)
-            self.itemconfigure(items["fill"], fill="#5C2626" if status == "paused" else (RED if self.hunt else CYAN))
+            self.itemconfigure(items["fill"], fill="#5C2626" if status == "paused" else self.accent)
             if self.hunt:
                 edge = RED if hunt_target else theme.mix("#1A0608", RED, .5)
                 surface = "#120507" if status == "paused" else "#170709"
             else:
-                edge = theme.mix("#080C12", CYAN, .85 if targeted else .35)
+                edge = theme.mix("#080C12", self.accent, .85 if targeted else .35)
                 surface = "#080C12"
             self.itemconfigure(items["box"], outline=edge, fill=surface, width=1)
-            ring = theme.mix(theme.BG, RED if hunt_target else CYAN, .35 if hunt_target else .25)
+            ring = theme.mix(theme.BG, RED if hunt_target else self.accent, .35 if hunt_target else .25)
             self.itemconfigure(items["ring"], outline=ring, state="normal" if targeted else "hidden")
             if hunt_target:
                 bh = self.fonts["badge"].metrics("linespace") + 2
